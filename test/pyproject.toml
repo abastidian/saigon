@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+directory = "../dist"
+[tool.hatch.version]
+path = "saigon_test/__init__.py"
+
+[project]
+name = "saigon-test"
+dynamic = ["version"]
+authors = [
+  { name="abasitdian@gmail.com" },
+]
+description = "Common components to build digital backends"
+requires-python = ">=3.12"
+dependencies = [
+    "saigon[test]",
+]
+classifiers = [
+    "Programming Language :: Python :: 3"
+]
+[project.optional-dependencies]
+build = [
+    "saigon[build]",
+]
+
+[project.urls]
+"Source Code" = "https://github.com/abastidian/saigon"
+
+[tool.hatch.build.targets.sdist]
+include = ["saigon_test"]
+
+[project.scripts]
+saigon-lint = "saigon_test.lint:run_flake8"
+cognito-cli = "saigon_test.cli.cognito:main"
+
+[tool.hatch.envs.default]
+detached=true
+
+
+
+
