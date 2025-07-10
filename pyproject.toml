@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 path = "src/saigon/__init__.py"
 
 [project]
-name = "saigon"
+name = "saigon-py"
 dynamic = ["version"]
 authors = [
   { name="abastidian@gmail.com" },
@@ -16,26 +16,42 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "python_json_logger~=3.2.1",
-    "pydantic~=2.10.5",
-    "fastapi~=0.115.6",
-    "boto3~=1.35.97",
-    "aws_lambda_typing~=2.20.0",
-    "mypy-boto3-timestream-write~=1.35.93",
-    "mypy-boto3-timestream-query~=1.35.93",
-    "mypy-boto3-iotsitewise~=1.35.93",
-    "mypy-boto3-s3~=1.35.93",
-    "mypy-boto3-sqs~=1.35.93",
-    "mypy_boto3_secretsmanager~=1.35.93",
-    "mypy_boto3_cognito_idp~=1.35.93",
-    "mypy_boto3_cognito_identity~=1.35.93",
-    "sqlalchemy~=2.0.37",
-    "pyjwt~=2.10.1"
+    "pydantic~=2.11.7",
 ]
 classifiers = [
     "Programming Language :: Python :: 3"
 ]
 
 [project.optional-dependencies]
+aws = [
+    "boto3~=1.35.97",
+    "aws_lambda_typing~=2.20.0",
+    "mypy-boto3-s3~=1.35.93",
+    "mypy-boto3-sqs~=1.35.93",
+    "mypy_boto3_secretsmanager~=1.35.93",
+    "mypy_boto3_cognito_idp~=1.35.93",
+    "mypy_boto3_cognito_identity~=1.35.93",
+    "mypy_boto3_iot~=1.35.93",
+]
+orm = [
+    "sqlalchemy~=2.0.37",
+]
+rest = [
+    "requests~=2.32.4"
+]
+sftp = [
+    "paramiko~=3.5.1"
+]
+fastapi = [
+    "fastapi~=0.115.6",
+    "pyjwt~=2.10.1",
+]
+all = [
+    "saigon[aws,orm,fastapi,sftp,rest]"
+]
+extras = [
+    "Jinja2~=3.1.5"
+]
 test = [
     "pytest~=8.3.5",
     "pytest_asyncio~=0.26.0",
@@ -46,20 +62,24 @@ test = [
     "prompt_toolkit~=3.0.51"
 ]
 build = [
-    "packaging==23.2",
-    "hatchling==1.24.2",
-    "hatch==1.13.0",
+    "hatch==1.14.0",
     "twine==6.1.0"
 ]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/saigon"]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/saigon"]
+
 [project.urls]
 "Source Code" = "https://github.com/abastidian/saigon"
+
+[tool.hatch.envs.default]
+detached=true
+skip-install = true
+path = ".venv"
 
 [tool.hatch.envs.default.scripts]
 lint = "saigon-lint"
 
-[tool.hatch.envs.default]
-detached=true

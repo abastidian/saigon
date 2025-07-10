@@ -1,12 +1,13 @@
 import random
-from datetime import datetime
 import uuid
 import enum
 import time
 import pytest
+from contextlib import ExitStack
+from datetime import datetime
 from types import UnionType
 from typing import (
-    Type, Dict, Any, Callable, TypeVar, Optional, Union, get_origin, get_args, NewType
+    Type, Dict, Any, Callable, TypeVar, Optional, Union, get_origin, get_args, NewType, Generator
 )
 
 from saigon.orm.connection import DbConnector
@@ -18,24 +19,20 @@ from pydantic import BaseModel
 __all__ = [
     'make_test_model_data',
     'db_connector',
-    'wait_for_condition'
+    'wait_for_condition',
+    'exit_stack',
+    'GeneratorReturnValue'
 ]
 
 _random = random.Random()
 
 _ANY_TYPE = TypeVar('_ANY_TYPE')
 
-
-@pytest.fixture()
-def base_db_env() -> BaseDbEnv:
-    db_env = BaseDbEnv('SAIGON')
-    db_env.setvars()
-
-    return db_env
+GeneratorReturnValue = Generator[ModelTypeDef, None, None]
 
 
 @pytest.fixture(scope='session')
-def db_connector(base_db_env) -> DbConnector:
+def db_connector(base_db_env: BaseDbEnv) -> DbConnector:
     return DbConnector(base_db_env.db_credentials)
 
 
@@ -51,7 +48,7 @@ def wait_for_condition[ResultType](
         time.sleep(5)
         retry_count += 1
 
-    raise TimeoutError(f"condition not met")
+    raise TimeoutError('condition not met')
 
 
 def make_test_model_data(
@@ -79,7 +76,7 @@ def _generate_test_value(
         union_type = get_args(value_type)
         return _generate_test_value(union_type[0])
 
-    if type(value_type) == NewType:
+    if value_type is NewType:
         return _generate_test_value(
             value_type.__supertype__, member_name
         )
@@ -102,6 +99,12 @@ def _generate_test_value(
         value_type, lambda _: value_type()
     )
     return value_generator(member_name)
+
+
+@pytest.fixture(scope='function')
+def exit_stack() -> Generator[ExitStack, None, None]:
+    with ExitStack() as stack:
+        yield stack
 
 
 _field_value_generators: Dict[Type[Any], Callable] = {

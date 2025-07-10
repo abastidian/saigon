@@ -1,20 +1,17 @@
-from typing import Optional, List, Callable, Sequence, Type
-import base64
-import json
 import logging
 import time
 import abc
 import functools
+from typing import Optional, List, Callable, Sequence, Type
 from contextlib import contextmanager, AbstractContextManager
 from contextvars import ContextVar
 
 import sqlalchemy
 from sqlalchemy import engine_from_config, Row, RowMapping
 
-from pydantic_core import to_jsonable_python
+from pydantic import BaseModel
 
 from saigon.model import (
-    CustomQuerySelection,
     QueryDataParams,
     QueryDataPaginationToken,
     ModelTypeDef,
@@ -38,29 +35,47 @@ _CONNECTION_CONTEXT_VAR = ContextVar('db-connection')
 
 
 class DbExecutionError(Exception):
+    """Custom exception raised for database execution errors.
+
+    This exception wraps underlying SQLAlchemy exceptions to provide a
+    consistent error handling mechanism within the application.
+    """
     def __init__(self, *args):
         super().__init__(*args)
 
 
 class DbConnector:
+    """Provides a thin wrapper around a SQLAlchemy engine for database interactions.
 
-    """
-    Provide a thin wrapper around a SQLAlchemy engine.
+    Manages the SQLAlchemy engine and provides methods for executing queries,
+    fetching results, and reflecting database metadata. It also integrates
+    with a context variable for managing transactional connections.
     """
     def __init__(self, credentials: DbSecretCredentials):
-        """
-        Instantiate an engine with the given configuration.
+        """Instantiates a SQLAlchemy engine with the given database credentials.
+
+        Args:
+            credentials (DbSecretCredentials): An object containing the database
+                connection details (e.g., `PostgreSQLSecretCredentials`).
         """
         self._engine_config = {
             'sqlalchemy.url': credentials.db_url
         }
 
-        # actually build the engine
+        # Actually build the engine
         self._engine = None
         self.refresh_engine()
 
     def refresh_engine(self) -> None:
-        """Refresh the Database Connection with an updated set of credentials."""
+        """Refreshes the database connection by re-creating the SQLAlchemy engine.
+
+        This method is useful for scenarios where connection parameters might
+        change or to explicitly dispose of old connections. It relies on
+        Python's garbage collection to close previous engine's connections.
+
+        Raises:
+            DbExecutionError: If there's an error during engine creation.
+        """
         try:
             self._engine: sqlalchemy.engine.Engine = engine_from_config(
                 configuration=self._engine_config
@@ -76,11 +91,23 @@ class DbConnector:
 
     @property
     def engine(self) -> sqlalchemy.engine.Engine:
-        """sqlalchemy.engine.Engine: Obtain a reference to the underlying SQLAlchemy engine."""
+        """Obtains a reference to the underlying SQLAlchemy engine.
+
+        Returns:
+            sqlalchemy.engine.Engine: The SQLAlchemy engine instance.
+        """
         return self._engine
 
     @property
     def connection(self) -> Optional[sqlalchemy.Connection]:
+        """Retrieves the current database connection from the context variable.
+
+        This property allows access to a connection that might be bound
+        to a transaction via `transaction_context` or `transactional` decorator.
+
+        Returns:
+            Optional[sqlalchemy.Connection]: The current connection if set, otherwise None.
+        """
         return _CONNECTION_CONTEXT_VAR.get(None)
 
     def fetch_one(
@@ -88,13 +115,18 @@ class DbConnector:
         selectable: sqlalchemy.Executable,
         **kwargs,
     ) -> Optional[sqlalchemy.engine.result.Row]:
-        """
-        Execute the given SQLAlchemy selectable and return the first row.
+        """Executes the given SQLAlchemy selectable and returns the first row.
 
-        Arguments:
-            selectable: Any object considered "selectable" by SQLAlchemy.
-        """
+        Args:
+            selectable (sqlalchemy.Executable): Any object considered "selectable"
+                by SQLAlchemy (e.g., a `sqlalchemy.Select` statement).
+            **kwargs: Additional keyword arguments to pass to the `execute` method,
+                such as `parameters` for bind values.
 
+        Returns:
+            Optional[sqlalchemy.engine.result.Row]: The first row of the result set,
+                or None if no rows are found.
+        """
         return self.execute(selectable, **kwargs).first()
 
     def fetch_all(
@@ -102,13 +134,19 @@ class DbConnector:
             selectable: sqlalchemy.Executable,
             **kwargs
     ) -> Sequence[sqlalchemy.engine.result.Row]:
-        """
-        Execute the given SQLAlchemy selectable and return all the rows.
+        """Executes the given SQLAlchemy selectable and returns all rows.
 
         An empty list is returned if no rows match the selection.
 
-        Arguments:
-            selectable: Any object considered "selectable" by SQLAlchemy.
+        Args:
+            selectable (sqlalchemy.Executable): Any object considered "selectable"
+                by SQLAlchemy (e.g., a `sqlalchemy.Select` statement).
+            **kwargs: Additional keyword arguments to pass to the `execute` method,
+                such as `parameters` for bind values.
+
+        Returns:
+            Sequence[sqlalchemy.engine.result.Row]: A sequence of all rows from the
+                result set.
         """
         return self.execute(selectable, **kwargs).fetchall()
 
@@ -117,24 +155,25 @@ class DbConnector:
             obj: sqlalchemy.Executable,
             **kwargs
     ) -> sqlalchemy.engine.ResultProxy:
-        """
-        Execute the given SQLAlchemy callable object or literal SQL statement.
+        """Executes the given SQLAlchemy callable object or literal SQL statement.
 
         This method will acquire a connection from the pool, execute the given
-        statement and return the result
+        statement, and return the result. If a connection is already bound to
+        the current context (e.g., by a transaction), that connection will be used.
 
-       Arguments:
-            obj: Statement to execute. See SQLAlchemy's docs for the full list of supported types.
-                For literal statements prepare this value with
-                ``sqlalchemy.text('SELECT ... FROM')``.
-        Keyword Arguments:
-            parameters (Union[Dict, Iterable]): Bind parameter values
+        Args:
+            obj (sqlalchemy.Executable): Statement to execute. See SQLAlchemy's docs
+                for the full list of supported types. For literal statements,
+                prepare this value with `sqlalchemy.text('SELECT ... FROM')`.
+            **kwargs: Keyword arguments for the execution, such as `parameters`
+                (Union[Dict, Iterable]) for bind parameter values.
 
         Returns:
-            sqlalchemy.ResultProxy: Statement result.
+            sqlalchemy.ResultProxy: The statement result.
 
         Raises:
-            DbExecutionError: All SQLAlchemy exceptions are caught and translated.
+            DbExecutionError: All SQLAlchemy exceptions are caught and re-raised
+                as `DbExecutionError`.
         """
         if (connection := self.connection) is None:
             # SQLAlchemy uses an implicit connection here with close_with_result=True.
@@ -149,15 +188,23 @@ class DbConnector:
             raise DbExecutionError(str(err)) from err
 
     def reflect(self, retries: int) -> sqlalchemy.MetaData:
-        """
-        Reflect all database objects.
+        """Reflects all database objects (tables, etc.) into a SQLAlchemy MetaData object.
 
-        Arguments:
-            retries: Number of retries before raising an exception. This method is
-            typically called at startup. Use this argument to handle timing issues
-            between service and database startup.
-        """
+        This method is typically called at service startup. It includes a retry
+        mechanism to handle transient connection issues or timing problems
+        between service and database startup.
 
+        Args:
+            retries (int): The number of retries before raising an exception.
+                Each retry uses an exponential back-off.
+
+        Returns:
+            sqlalchemy.MetaData: A `MetaData` object containing the reflected
+                database schema.
+
+        Raises:
+            DbExecutionError: If reflection fails after all retries.
+        """
         meta = sqlalchemy.MetaData()
         for attempt in range(retries):
             try:
@@ -174,8 +221,11 @@ class DbConnector:
 
 
 class AbstractDbManager(abc.ABC):
-    """
-    Provides a uniform interface for interacting with a service's database model.
+    """Provides a uniform interface for interacting with a service's database model.
+
+    This abstract class encapsulates common database operations such as
+    transaction management, pagination, and entity retrieval/deletion,
+    working with a `DbConnector` instance.
     """
 
     __meta = None
@@ -185,34 +235,156 @@ class AbstractDbManager(abc.ABC):
             db_connector: DbConnector,
             retries: Optional[int] = CONNECTION_MAX_RETRIES_DEFAULT
     ) -> None:
+        """Initializes the AbstractDbManager.
+
+        Performs database reflection upon initialization if it hasn't been done already.
+
+        Args:
+            db_connector (DbConnector): An instance of `DbConnector` to use for
+                database interactions.
+            retries (Optional[int]): The number of retries for database reflection
+                at startup. Defaults to `CONNECTION_MAX_RETRIES_DEFAULT`.
+        """
         self.db_connector = db_connector
         self.__reflect(retries)
 
     @classmethod
     def meta(cls) -> sqlalchemy.MetaData:
+        """Returns the SQLAlchemy MetaData object containing reflected database schema.
+
+        This is a class method because the MetaData is typically shared across
+        all instances of a DbManager subclass.
+
+        Returns:
+            sqlalchemy.MetaData: The reflected database metadata.
+        """
         return cls.__meta
 
     def transaction(self) -> AbstractContextManager:
+        """Returns a context manager for managing a database transaction.
+
+        Usage with `with self.transaction():` ensures that all database
+        operations within the block run within a single transaction.
+
+        Returns:
+            AbstractContextManager: A context manager that yields a SQLAlchemy
+                connection for transactional operations.
+        """
         return transaction_context(self.db_connector)
 
-    def paginate(
+    def paginate[QuerySelection, ModelType: BaseModel](
             self,
-            query_selection_type: Type[CustomQuerySelection],
-            query_params: QueryDataParams[CustomQuerySelection],
-            build_select: Callable[[Optional[CustomQuerySelection]], sqlalchemy.Select],
-            single_row_to_data: Optional[Callable[[RowMapping, ...], ModelTypeDef]] = None,
-            multirow_to_data: Optional[Callable[[Sequence[Row], ...], List[ModelTypeDef]]] = None,
+            query_selection_type: Type[QuerySelection],
+            query_params: QueryDataParams[QuerySelection],
+            build_select: Callable[[Optional[QuerySelection]], sqlalchemy.Select],
+            single_row_to_data: Optional[Callable[[RowMapping, ...], ModelType]] = None,
+            multirow_to_data: Optional[Callable[[Sequence[Row], ...], List[ModelType]]] = None,
             **kwargs
-    ) -> QueryDataResult[ModelTypeDef]:
+    ) -> QueryDataResult[ModelType]:
+        """Paginates database queries based on provided parameters and converts results to models.
+
+        This method handles the logic for applying limits and offsets, decoding
+        pagination tokens, executing the query, and converting the raw database
+        rows into Pydantic models.
+
+        Args:
+            query_selection_type (Type[QuerySelection]): The Pydantic model type
+                representing the query selection criteria.
+            query_params (QueryDataParams[QuerySelection]): An object containing
+                pagination and query selection parameters.
+            build_select (Callable[[Optional[QuerySelection]], sqlalchemy.Select]):
+                A callable that takes an optional `QuerySelection` object and
+                returns a SQLAlchemy `Select` statement. This function defines
+                the base query.
+            single_row_to_data (Optional[Callable[[RowMapping, ...], ModelType]]):
+                A callable that converts a single `RowMapping` (from SQLAlchemy)
+                into an instance of `ModelType`. Required if `multirow_to_data` is None.
+            multirow_to_data (Optional[Callable[[Sequence[Row], ...], List[ModelType]]]):
+                A callable that converts a sequence of `Row` objects into a list
+                of `ModelType` instances. Required if `single_row_to_data` is None.
+            **kwargs: Additional keyword arguments to pass to the `single_row_to_data`
+                or `multirow_to_data` conversion functions.
+
+        Returns:
+            QueryDataResult[ModelType]: An object containing the fetched data
+                (list of `ModelType` instances) and an updated pagination token
+                (if more data is available).
+
+        Raises:
+            ValueError: If neither `single_row_to_data` nor `multirow_to_data` is provided.
+
+        Example:
+            Consider a `User` model and a `UserQuery` for selection:
+            ```python
+            from pydantic import BaseModel
+            from sqlalchemy import Table, Column, Integer, String, MetaData, select
+
+            # Assume 'users_table' is reflected via manager.meta()
+            metadata = MetaData()
+            users_table = Table(
+                "users", metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                Column("email", String)
+            )
+
+            class User(BaseModel):
+                id: int
+                name: str
+                email: str
+
+            class UserQuery(BaseModel):
+                name_starts_with: Optional[str] = None
+
+            def build_user_select(query_selection: Optional[UserQuery]) -> sqlalchemy.Select:
+                stmt = select(users_table)
+                if query_selection and query_selection.name_starts_with:
+                    stmt = stmt.where(users_table.c.name.startswith(query_selection.name_starts_with))
+                return stmt
+
+            def row_to_user_model(row_mapping: RowMapping) -> User:
+                return User(id=row_mapping['id'], name=row_mapping['name'], email=row_mapping['email'])
+
+            # Assuming db_manager is an instance of AbstractDbManager
+            # db_manager = MyDbManager(db_connector=DbConnector(credentials))
+
+            # Query for users with name starting with 'J', limit 2
+            query_params = QueryDataParams[UserQuery](
+                query_selection=UserQuery(name_starts_with="J"),
+                max_count=2
+            )
+            result = db_manager.paginate(
+                query_selection_type=UserQuery,
+                query_params=query_params,
+                build_select=build_user_select,
+                single_row_to_data=row_to_user_model
+            )
+
+            print(f"Fetched users: {[u.name for u in result.data]}")
+            if result.pagination_token:
+                print(f"Next token available: {result.pagination_token.query_id}")
+
+            # To fetch next page:
+            # next_query_params = QueryDataParams[UserQuery](
+            #     pagination_token=result.pagination_token,
+            #     max_count=2
+            # )
+            # next_result = db_manager.paginate(
+            #     query_selection_type=UserQuery,
+            #     query_params=next_query_params,
+            #     build_select=build_user_select,
+            #     single_row_to_data=row_to_user_model
+            # )
+            # print(f"Fetched next users: {[u.name for u in next_result.data]}")
+            ```
+        """
         if single_row_to_data is None and multirow_to_data is None:
             raise ValueError('A converter from row to model data must be provided')
 
         if (pagination_token := query_params.pagination_token) and pagination_token.query_id:
-            query_selection_dict: dict = json.loads(
-                base64.b64decode(pagination_token.query_id.encode()).decode()
+            query_selection = query_params.decode_query_selection(
+                query_selection_type
             )
-            query_selection = query_selection_type(**query_selection_dict)
-
         else:
             query_selection = query_params.query_selection
 
@@ -245,13 +417,8 @@ class AbstractDbManager(abc.ABC):
                 pagination_token.next_token_as_offset = query_offset + row_count
             else:
                 # codify the custom selection
-                query_id = base64.urlsafe_b64encode(
-                    json.dumps(
-                        to_jsonable_python(query_selection)
-                    ).encode()
-                ).decode()
                 pagination_token = QueryDataPaginationToken.from_offset(
-                    query_id,
+                    QueryDataParams(query_selection=query_selection).encode_query_selection(),
                     query_params.max_count
                 )
         else:
@@ -264,6 +431,18 @@ class AbstractDbManager(abc.ABC):
     def get_entity(
             self, model_type: Type[ModelTypeDef], select_statement: sqlalchemy.Select
     ) -> Optional[ModelTypeDef]:
+        """Fetches a single entity from the database and converts it to a Pydantic model.
+
+        Args:
+            model_type (Type[ModelTypeDef]): The Pydantic model type to convert
+                the fetched row into.
+            select_statement (sqlalchemy.Select): The SQLAlchemy `Select` statement
+                to execute, expected to return at most one row.
+
+        Returns:
+            Optional[ModelTypeDef]: An instance of `model_type` if a row is found,
+                otherwise None.
+        """
         row_entity = self.db_connector.fetch_one(select_statement)
         return (
             row_mapping_to_model_data(model_type, row_entity._mapping) if row_entity
@@ -271,11 +450,29 @@ class AbstractDbManager(abc.ABC):
         )
 
     def delete_entity(self, delete_statement: sqlalchemy.Delete):
+        """Executes a SQLAlchemy Delete statement to remove entities from the database.
+
+        Args:
+            delete_statement (sqlalchemy.Delete): The SQLAlchemy `Delete` statement
+                to execute.
+        """
         self.db_connector.execute(delete_statement)
 
     def __reflect(self, retries: int) -> sqlalchemy.MetaData:
+        """Internal method to perform database reflection.
+
+        This method ensures that the `__meta` class variable is populated with
+        the reflected database schema. It's designed to be called once per
+        application lifecycle.
+
+        Args:
+            retries (int): The number of retries for reflection.
+
+        Returns:
+            sqlalchemy.MetaData: The reflected database metadata.
+        """
         # NOTE: this assumes that you do not change the table definition without
-        # restarting the service.  This should be a safe assumption since we will need
+        # restarting the service. This should be a safe assumption since we will need
         # to restart the service in order to have it consume table changes, but it
         # is something we need to keep in mind.
         if self.__class__.__meta is None:
@@ -286,6 +483,39 @@ class AbstractDbManager(abc.ABC):
 
 @contextmanager
 def transaction_context(db_connector: DbConnector) -> sqlalchemy.Connection:
+    """A context manager for managing a database transaction.
+
+    This context manager acquires a connection from the `DbConnector`'s engine,
+    starts a transaction, and yields the connection. The transaction is
+    committed upon successful exit from the `with` block or rolled back
+    if an exception occurs. It also binds the connection to a `ContextVar`
+    for access by other methods within the same context.
+
+    Args:
+        db_connector (DbConnector): The database connector instance.
+
+    Yields:
+        sqlalchemy.Connection: The active SQLAlchemy connection within the transaction.
+
+    Raises:
+        DbExecutionError: If any SQLAlchemy error occurs during the transaction.
+
+    Example:
+        ```python
+        # Assuming db_connector is an instance of DbConnector
+        # db_connector = DbConnector(credentials)
+
+        try:
+            with transaction_context(db_connector) as conn:
+                # Execute multiple statements within the same transaction
+                conn.execute(sqlalchemy.text("INSERT INTO users (name) VALUES ('Alice')"))
+                conn.execute(sqlalchemy.text("UPDATE products SET price = 100 WHERE id = 1"))
+                # If an error occurs here, both operations will be rolled back
+            print("Transaction committed successfully.")
+        except DbExecutionError as e:
+            print(f"Transaction failed: {e}")
+        ```
+    """
     previous_token = None
     try:
         with db_connector.engine.begin() as connection:
@@ -299,15 +529,54 @@ def transaction_context(db_connector: DbConnector) -> sqlalchemy.Connection:
 
 
 def transactional(func: Callable) -> Callable:
-    """
-    Makes a method execute within the context of a database transaction.
+    """A decorator that ensures a method executes within a database transaction.
+
+    If the decorated method is called and a database connection is already
+    bound to the current context (meaning it's already within a transaction),
+    the method will use that existing connection. Otherwise, it will create
+    a new transaction context using `transaction_context` for the duration
+    of the method's execution.
+
+    Args:
+        func (Callable): The method to be decorated. This method is expected
+            to be an instance method of a class that inherits from `AbstractDbManager`,
+            and its first argument should be `self` (the manager instance).
+
+    Returns:
+        Callable: The wrapped function, which now executes within a transaction.
+
+    Example:
+        ```python
+        class MyManager(AbstractDbManager):
+            def __init__(self, db_connector: DbConnector):
+                super().__init__(db_connector)
+                # Assume 'users_table' is reflected and available via self.meta()
+
+            @transactional
+            def add_user_and_log(self, user_name: str, log_message: str):
+                # Both operations will be part of the same transaction
+                insert_stmt = sqlalchemy.text("INSERT INTO users (name) VALUES (:name)").bindparams(name=user_name)
+                self.db_connector.execute(insert_stmt)
+
+                log_stmt = sqlalchemy.text("INSERT INTO logs (message) VALUES (:message)").bindparams(message=log_message)
+                self.db_connector.execute(log_stmt)
+                print(f"User '{user_name}' added and log '{log_message}' recorded.")
+
+        # Usage:
+        # db_connector = DbConnector(credentials)
+        # manager = MyManager(db_connector)
+        # manager.add_user_and_log("Bob", "New user registered")
+        # If any error occurs during add_user_and_log, both inserts are rolled back.
+        ```
     """
 
     @functools.wraps(func)
     def wrapped(manager: AbstractDbManager, *args, **kwargs):
         if manager.db_connector.connection:
+            # If already in a transaction, just execute the function
             return func(manager, *args, **kwargs)
 
+        # Otherwise, create a new transaction context
         with transaction_context(manager.db_connector):
             return func(manager, *args, **kwargs)
 

@@ -25,7 +25,7 @@ from shellody.completion import CompletionContext, KeyValueCompleter
 
 from pydantic import BaseModel
 
-from saigon.model import ModelTypeDef
+from saigon.model import ModelTypeDef, QueryDataPaginationToken
 from saigon.model import QueryDataParams
 from saigon.rest.client import AuthRestClient
 
@@ -104,13 +104,21 @@ class BaseResourceHandler[ResourceType](CommandHandler, abc.ABC):
             arg_value_provider if (arg_value_provider := kwargs.get('arg_value_provider', None))
             else lambda _: set()
         )
-        self._query_type = kwargs.get('query_type', None)
-        self._query_options = {
+        self._query_selection_type = kwargs.get('query_type', None)
+        # Build the map of query parameters based on the specified selection type,
+        # but always including the pagination token params
+        self._query_max_count_option = {'max_count': 'int'}
+        self._query_pagination_token_options = {
             name: info.annotation.__name__
-            for name, info in self._query_type.model_fields.items()
-        } if self._query_type else {}
+            for name, info in QueryDataPaginationToken.model_fields.items()
+        }
+        self._query_selection_options = {
+            name: info.annotation.__name__
+            for name, info in self._query_selection_type.model_fields.items()
+        } if self._query_selection_type else {}
+
         self._request_type = kwargs.get('request_type', None)
-        self._response_type = kwargs.get('_response_type', None)
+        self._response_type = kwargs.get('response_type', None)
 
     @property
     def name(self) -> str:
@@ -128,7 +136,7 @@ class BaseResourceHandler[ResourceType](CommandHandler, abc.ABC):
     def arg_spec(self) -> Dict[str, dict]:
         return {
             **(
-                BaseResourceHandler._QUERY_ARG_SPEC if self._query_type else {}
+                BaseResourceHandler._QUERY_ARG_SPEC if self._query_selection_type else {}
             ),
             **(
                 BaseResourceHandler._PARENT_ID_ARG_SPEC if self._parent else {}
@@ -137,12 +145,43 @@ class BaseResourceHandler[ResourceType](CommandHandler, abc.ABC):
 
     @override
     def get_completions(self, context: CompletionContext) -> Iterable[Completion]:
-        if self._query_type and context.arg_descriptor.name == 'query':
+        # Query completions
+        if self._query_selection_type and context.arg_descriptor.name == 'query':
+            current_query_options = context.word.split(',', 2)
+            if (
+                    current_query_options[0].startswith('max_count')
+                    or current_query_options[0] == ''
+            ):
+                current_query_options.pop(0)
+
+            first_current_option = (
+                current_query_options[0].split('=')[0] if current_query_options
+                else None
+            )
+            if first_current_option:
+                if first_current_option in self._query_pagination_token_options.keys():
+                    completion_query_options = dict(
+                        self._query_max_count_option,
+                        **self._query_pagination_token_options
+                    )
+                else:
+                    completion_query_options = dict(
+                        self._query_max_count_option,
+                        **self._query_selection_options
+                    )
+            else:
+                completion_query_options = dict(
+                    self._query_max_count_option,
+                    **self._query_selection_options,
+                    **self._query_pagination_token_options
+                )
+
             for completion in KeyValueCompleter(
-                    list(self._query_options.keys()), ['=']
+                    list(completion_query_options.keys()), ['=']
             ).get_completions(context):
                 yield completion
 
+        # Parent or entity IDs completion
         if context.arg_descriptor.name == 'parent_id':
             entity_ids = self._parent.entity_ids
         elif context.arg_descriptor.name == 'id':
@@ -167,8 +206,18 @@ class BaseResourceHandler[ResourceType](CommandHandler, abc.ABC):
             name, value = param_assignment.split('=')
             selection_init[name] = value
 
+        pagination_token_type = None
+        for key in self._query_pagination_token_options:
+            if key in selection_init:
+                pagination_token_type = QueryDataPaginationToken
+                break
+
         return QueryDataParams(
-            query=self._query_type(**selection_init)
+            max_count=selection_init.pop('max_count', None),
+            query=(
+                pagination_token_type(**selection_init) if pagination_token_type
+                else self._query_selection_type(**selection_init)
+            )
         )
 
 
@@ -201,7 +250,7 @@ class QueryResourceHandler[ResourceType](BaseResourceHandler[ResourceType]):
         # Build query data from argument when required
         query_data = (
             super()._parse_query_selection(command_args.query)
-        ) if self._query_type and command_args.query else None
+        ) if self._query_selection_type and command_args.query else None
 
         # Build entity id path from arguments
         path_id = [command_args.parent_id] if self._parent else []
@@ -217,7 +266,7 @@ class QueryResourceHandler[ResourceType](BaseResourceHandler[ResourceType]):
             path_id += [target_id]
             result = self._get_entity(*path_id)
             self._entities = [result]
-        elif self._query_type:
+        elif self._query_selection_type:
             result = self._query_entities(*path_id, query_data)
             self._entities = result.data
         else:
