@@ -47,7 +47,7 @@ fastapi = [
     "pyjwt~=2.10.1",
 ]
 all = [
-    "saigon[aws,orm,fastapi,sftp,rest]"
+    "saigon-py[aws,orm,fastapi,sftp,rest]"
 ]
 extras = [
     "Jinja2~=3.1.5"
@@ -65,6 +65,11 @@ build = [
     "hatch==1.14.0",
     "twine==6.1.0"
 ]
+docs = [
+    "sphinx~=8.2.3",
+    "sphinx_rtd_theme~=3.0.2",
+    "sphinx_autodoc_typehints~=3.2.0"
+]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/saigon"]
@@ -74,6 +79,7 @@ packages = ["src/saigon"]
 
 [project.urls]
 "Source Code" = "https://github.com/abastidian/saigon"
+"Documentation" = "https://saigon.readthedocs.io/en/latest/"
 
 [tool.hatch.envs.default]
 detached=true

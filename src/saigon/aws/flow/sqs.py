@@ -1,15 +1,16 @@
 from typing import Dict, Protocol, Union, Iterable, Type, Generic
 
+from pydantic import BaseModel
+
 import boto3
 from mypy_boto3_sqs.client import SQSClient
 
 import sqlalchemy
 
-from saigon.orm.connection import DbConnector
-from saigon.model import ModelTypeDef
+from ...orm.connection import DbConnector
 
 
-class SqlStatementBuilder(Protocol[ModelTypeDef]):
+class SqlStatementBuilder[ModelTypeDef: BaseModel](Protocol):
     """
     A protocol defining the interface for building SQLAlchemy SQL statements
     and extracting parameters from a message.
@@ -59,7 +60,7 @@ class SqlStatementBuilder(Protocol[ModelTypeDef]):
         ...
 
 
-class SqsToRdsForwarder(Generic[ModelTypeDef]):
+class SqsToRdsForwarder[ModelTypeDef: BaseModel]():
     """
     A generic class to forward messages from an SQS queue to an RDS database.
 

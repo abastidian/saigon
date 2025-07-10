@@ -66,9 +66,11 @@ class RequestHandler[
             *args,
             **kwargs
     ) -> ResponseType:
-        """Processes the incoming request, calls the internal handler, and manages responses.
+        """
+        Processes the incoming request, calls the internal handler, and manages responses.
 
         This method serves as a wrapper around the `_handle` method, providing:
+
         - Defaulting `request_body` to `EmptyRequestBody` if `None`.
         - Type checking to ensure the `_handle` method returns a non-None
           response if `ResponseType` is not `EmptyResponseBody`.

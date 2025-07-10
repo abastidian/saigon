@@ -25,8 +25,8 @@ def filter_unknown_model_fields(
         Mapping[str, Any]: A new dictionary containing only the keys that
             match the `model_type`'s fields and have non-None values.
 
-    Example:
-        ```python
+    Example::
+
         from pydantic import BaseModel
 
         class User(BaseModel):
@@ -45,7 +45,6 @@ def filter_unknown_model_fields(
         filtered_data = filter_unknown_model_fields(User, data)
         print(filtered_data)
         # Expected output: {'id': 1, 'name': 'Alice', 'email': 'alice@example.com'}
-        ```
     """
     return {
         name: value
@@ -83,8 +82,8 @@ def model_data_to_row_values(
             converted to strings (or kept as native types for dict, bool, list),
             ready for database operations.
 
-    Example:
-        ```python
+    Example::
+
         from pydantic import BaseModel
         from typing import Dict, List, Optional
 
@@ -119,7 +118,6 @@ def model_data_to_row_values(
         print(row_values_unset_excluded)
         # Expected: {'id': '102', 'name': 'Monitor', 'price': '300.0', 'metadata': {}, 'tags': []}
         # 'description' is not included because it was not explicitly set and exclude_unset is True
-        ```
     """
     return dict(
         {
@@ -147,7 +145,8 @@ def row_mapping_to_model_data(
         row_mapping: sqlalchemy.RowMapping,
         **kwargs: Any
 ) -> ModelType:
-    """Converts a SQLAlchemy `RowMapping` object into an instance of a Pydantic model.
+    """
+    Converts a SQLAlchemy `RowMapping` object into an instance of a Pydantic model.
 
     It first filters out any keys in the `row_mapping` that are not defined
     as fields in the `model_type` and removes `None` values, then instantiates
@@ -166,8 +165,8 @@ def row_mapping_to_model_data(
         ModelType: An instance of the specified Pydantic model populated with
             data from the `row_mapping` and `kwargs`.
 
-    Example:
-        ```python
+    Example::
+
         from pydantic import BaseModel
         import sqlalchemy
 
@@ -193,7 +192,6 @@ def row_mapping_to_model_data(
         user_model_override = row_mapping_to_model_data(User, mock_row_mapping, name="Charles")
         print(user_model_override)
         # Expected output: id=1 name='Charles' email='charlie@example.com'
-        ```
     """
     return model_type(
         **dict(

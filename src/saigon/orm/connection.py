@@ -11,14 +11,14 @@ from sqlalchemy import engine_from_config, Row, RowMapping
 
 from pydantic import BaseModel
 
-from saigon.model import (
+from ..model import (
     QueryDataParams,
     QueryDataPaginationToken,
     ModelTypeDef,
     QueryDataResult,
 )
-from saigon.orm.config import DbSecretCredentials
-from saigon.orm.model import row_mapping_to_model_data
+from .config import DbSecretCredentials
+from .model import row_mapping_to_model_data
 
 __all__ = [
     'DbExecutionError',
@@ -35,7 +35,8 @@ _CONNECTION_CONTEXT_VAR = ContextVar('db-connection')
 
 
 class DbExecutionError(Exception):
-    """Custom exception raised for database execution errors.
+    """
+    Custom exception raised for database execution errors.
 
     This exception wraps underlying SQLAlchemy exceptions to provide a
     consistent error handling mechanism within the application.
@@ -45,7 +46,8 @@ class DbExecutionError(Exception):
 
 
 class DbConnector:
-    """Provides a thin wrapper around a SQLAlchemy engine for database interactions.
+    """
+    Provides a thin wrapper around a SQLAlchemy engine for database interactions.
 
     Manages the SQLAlchemy engine and provides methods for executing queries,
     fetching results, and reflecting database metadata. It also integrates
@@ -67,7 +69,8 @@ class DbConnector:
         self.refresh_engine()
 
     def refresh_engine(self) -> None:
-        """Refreshes the database connection by re-creating the SQLAlchemy engine.
+        """
+        Refreshes the database connection by re-creating the SQLAlchemy engine.
 
         This method is useful for scenarios where connection parameters might
         change or to explicitly dispose of old connections. It relies on
@@ -91,7 +94,8 @@ class DbConnector:
 
     @property
     def engine(self) -> sqlalchemy.engine.Engine:
-        """Obtains a reference to the underlying SQLAlchemy engine.
+        """
+        Obtains a reference to the underlying SQLAlchemy engine.
 
         Returns:
             sqlalchemy.engine.Engine: The SQLAlchemy engine instance.
@@ -100,7 +104,8 @@ class DbConnector:
 
     @property
     def connection(self) -> Optional[sqlalchemy.Connection]:
-        """Retrieves the current database connection from the context variable.
+        """
+        Retrieves the current database connection from the context variable.
 
         This property allows access to a connection that might be bound
         to a transaction via `transaction_context` or `transactional` decorator.
@@ -115,7 +120,8 @@ class DbConnector:
         selectable: sqlalchemy.Executable,
         **kwargs,
     ) -> Optional[sqlalchemy.engine.result.Row]:
-        """Executes the given SQLAlchemy selectable and returns the first row.
+        """
+        Executes the given SQLAlchemy selectable and returns the first row.
 
         Args:
             selectable (sqlalchemy.Executable): Any object considered "selectable"
@@ -134,7 +140,8 @@ class DbConnector:
             selectable: sqlalchemy.Executable,
             **kwargs
     ) -> Sequence[sqlalchemy.engine.result.Row]:
-        """Executes the given SQLAlchemy selectable and returns all rows.
+        """
+        Executes the given SQLAlchemy selectable and returns all rows.
 
         An empty list is returned if no rows match the selection.
 
@@ -155,7 +162,8 @@ class DbConnector:
             obj: sqlalchemy.Executable,
             **kwargs
     ) -> sqlalchemy.engine.ResultProxy:
-        """Executes the given SQLAlchemy callable object or literal SQL statement.
+        """
+        Executes the given SQLAlchemy callable object or literal SQL statement.
 
         This method will acquire a connection from the pool, execute the given
         statement, and return the result. If a connection is already bound to
@@ -188,7 +196,8 @@ class DbConnector:
             raise DbExecutionError(str(err)) from err
 
     def reflect(self, retries: int) -> sqlalchemy.MetaData:
-        """Reflects all database objects (tables, etc.) into a SQLAlchemy MetaData object.
+        """
+        Reflects all database objects (tables, etc.) into a SQLAlchemy MetaData object.
 
         This method is typically called at service startup. It includes a retry
         mechanism to handle transient connection issues or timing problems
@@ -221,7 +230,8 @@ class DbConnector:
 
 
 class AbstractDbManager(abc.ABC):
-    """Provides a uniform interface for interacting with a service's database model.
+    """
+    Provides a uniform interface for interacting with a service's database model.
 
     This abstract class encapsulates common database operations such as
     transaction management, pagination, and entity retrieval/deletion,
@@ -250,7 +260,8 @@ class AbstractDbManager(abc.ABC):
 
     @classmethod
     def meta(cls) -> sqlalchemy.MetaData:
-        """Returns the SQLAlchemy MetaData object containing reflected database schema.
+        """
+        Returns the SQLAlchemy MetaData object containing reflected database schema.
 
         This is a class method because the MetaData is typically shared across
         all instances of a DbManager subclass.
@@ -261,7 +272,8 @@ class AbstractDbManager(abc.ABC):
         return cls.__meta
 
     def transaction(self) -> AbstractContextManager:
-        """Returns a context manager for managing a database transaction.
+        """
+        Returns a context manager for managing a database transaction.
 
         Usage with `with self.transaction():` ensures that all database
         operations within the block run within a single transaction.
@@ -281,7 +293,8 @@ class AbstractDbManager(abc.ABC):
             multirow_to_data: Optional[Callable[[Sequence[Row], ...], List[ModelType]]] = None,
             **kwargs
     ) -> QueryDataResult[ModelType]:
-        """Paginates database queries based on provided parameters and converts results to models.
+        """
+        Paginates database queries based on provided parameters and converts results to models.
 
         This method handles the logic for applying limits and offsets, decoding
         pagination tokens, executing the query, and converting the raw database
@@ -314,8 +327,9 @@ class AbstractDbManager(abc.ABC):
             ValueError: If neither `single_row_to_data` nor `multirow_to_data` is provided.
 
         Example:
-            Consider a `User` model and a `UserQuery` for selection:
-            ```python
+
+        Consider a `User` model and a `UserQuery` for selection::
+
             from pydantic import BaseModel
             from sqlalchemy import Table, Column, Integer, String, MetaData, select
 
@@ -376,7 +390,6 @@ class AbstractDbManager(abc.ABC):
             #     single_row_to_data=row_to_user_model
             # )
             # print(f"Fetched next users: {[u.name for u in next_result.data]}")
-            ```
         """
         if single_row_to_data is None and multirow_to_data is None:
             raise ValueError('A converter from row to model data must be provided')
@@ -431,7 +444,8 @@ class AbstractDbManager(abc.ABC):
     def get_entity(
             self, model_type: Type[ModelTypeDef], select_statement: sqlalchemy.Select
     ) -> Optional[ModelTypeDef]:
-        """Fetches a single entity from the database and converts it to a Pydantic model.
+        """
+        Fetches a single entity from the database and converts it to a Pydantic model.
 
         Args:
             model_type (Type[ModelTypeDef]): The Pydantic model type to convert
@@ -450,7 +464,8 @@ class AbstractDbManager(abc.ABC):
         )
 
     def delete_entity(self, delete_statement: sqlalchemy.Delete):
-        """Executes a SQLAlchemy Delete statement to remove entities from the database.
+        """
+        Executes a SQLAlchemy Delete statement to remove entities from the database.
 
         Args:
             delete_statement (sqlalchemy.Delete): The SQLAlchemy `Delete` statement
@@ -459,7 +474,8 @@ class AbstractDbManager(abc.ABC):
         self.db_connector.execute(delete_statement)
 
     def __reflect(self, retries: int) -> sqlalchemy.MetaData:
-        """Internal method to perform database reflection.
+        """
+        Internal method to perform database reflection.
 
         This method ensures that the `__meta` class variable is populated with
         the reflected database schema. It's designed to be called once per
@@ -483,7 +499,8 @@ class AbstractDbManager(abc.ABC):
 
 @contextmanager
 def transaction_context(db_connector: DbConnector) -> sqlalchemy.Connection:
-    """A context manager for managing a database transaction.
+    """
+    A context manager for managing a database transaction.
 
     This context manager acquires a connection from the `DbConnector`'s engine,
     starts a transaction, and yields the connection. The transaction is
@@ -500,8 +517,8 @@ def transaction_context(db_connector: DbConnector) -> sqlalchemy.Connection:
     Raises:
         DbExecutionError: If any SQLAlchemy error occurs during the transaction.
 
-    Example:
-        ```python
+    Example::
+
         # Assuming db_connector is an instance of DbConnector
         # db_connector = DbConnector(credentials)
 
@@ -514,7 +531,6 @@ def transaction_context(db_connector: DbConnector) -> sqlalchemy.Connection:
             print("Transaction committed successfully.")
         except DbExecutionError as e:
             print(f"Transaction failed: {e}")
-        ```
     """
     previous_token = None
     try:
@@ -529,7 +545,8 @@ def transaction_context(db_connector: DbConnector) -> sqlalchemy.Connection:
 
 
 def transactional(func: Callable) -> Callable:
-    """A decorator that ensures a method executes within a database transaction.
+    """
+    A decorator that ensures a method executes within a database transaction.
 
     If the decorated method is called and a database connection is already
     bound to the current context (meaning it's already within a transaction),
@@ -545,8 +562,8 @@ def transactional(func: Callable) -> Callable:
     Returns:
         Callable: The wrapped function, which now executes within a transaction.
 
-    Example:
-        ```python
+    Example::
+
         class MyManager(AbstractDbManager):
             def __init__(self, db_connector: DbConnector):
                 super().__init__(db_connector)
@@ -567,7 +584,6 @@ def transactional(func: Callable) -> Callable:
         # manager = MyManager(db_connector)
         # manager.add_user_and_log("Bob", "New user registered")
         # If any error occurs during add_user_and_log, both inserts are rolled back.
-        ```
     """
 
     @functools.wraps(func)

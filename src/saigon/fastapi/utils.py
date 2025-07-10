@@ -158,9 +158,11 @@ def validation_error_exception_handler(
 
 
 class LogMiddleware(BaseHTTPMiddleware):
-    """Middleware for FastAPI applications that enhances logging and request context.
+    """
+    Middleware for FastAPI applications that enhances logging and request context.
 
     This middleware provides two main functionalities:
+
     1. Wraps the `dispatch` method with `asynclogcontext`, making a request-specific
        log context available for all endpoint implementations.
     2. Encloses the `call_next` call within log messages, indicating the reception
@@ -168,7 +170,10 @@ class LogMiddleware(BaseHTTPMiddleware):
        the log context with `request_id` and `caller_id` from incoming headers.
 
     To use this middleware, add it to your FastAPI application:
-    `app.add_middleware(LogMiddleware, logger=my_logger)`
+
+    Example::
+
+        app.add_middleware(LogMiddleware, logger=my_logger)
     """
 
     def __init__(self, app: FastAPI, logger: logging.Logger):
@@ -183,7 +188,8 @@ class LogMiddleware(BaseHTTPMiddleware):
         self._logger = logger
 
     async def dispatch(self, request: Request, call_next):
-        """Dispatches the incoming request and processes the response.
+        """
+        Dispatches the incoming request and processes the response.
 
         This method sets up an asynchronous log context, extracts request IDs
         and caller IDs from headers to populate the context, logs the start
@@ -222,7 +228,8 @@ class LogMiddleware(BaseHTTPMiddleware):
 
 
 class AppContext(RequestContext):
-    """Represents the application context for a given request.
+    """
+    Represents the application context for a given request.
 
     This class extends `RequestContext` by adding request-specific utilities
     like `BackgroundTasks` and makes the context globally accessible via a `ContextVar`.
