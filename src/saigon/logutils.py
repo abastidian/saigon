@@ -2,7 +2,7 @@
 A set of utilities to enable structured context-aware logging in your application.
 
 This module provides multiple utilities to incorporate context-aware logging in as many parts
-of your code as possible. The main construct, ``logcontext``, allows you to create a local
+of your code as possible. The main construct, logcontext, allows you to create a local
 scoped context to define key-value items that will be appended all log messages generated under
 this context. Key-value items are automatically removed after exiting the context, hence log
 messages outside of it will not contain them.
@@ -41,7 +41,7 @@ Using Context Logging
 Three steps are needed to enable and use context logging:
 
 1. Enable structured context logging for the built-in Python logger with
-   :function:`enable_log_context`.
+   enable_log_context.
 
 2. Create a local scoped context to add log key items.
 
@@ -52,7 +52,7 @@ Understanding Scopes
 --------------------
 
 Logging contexts are implemented as :class:`contextlib::AbstractContextManager` using
-`contextvars::ContextVar`. This implementation allows to create self-managed contexts with
+``contextvars::ContextVar``. This implementation allows to create self-managed contexts with
 top-down items visibility. That is, key items set in an outer scope are passed down to its
 inner scopes, which in addition can not only set newer keys but also override any of the keys
 from the outer scope. Then, when the inner scope exits, the outer scope is restored to the
@@ -127,8 +127,8 @@ _LOG_CONTEXT_MGR = ContextVar('log-context-mgr')
 
 class __ContextLogFilter(logging.Filter):
     """
-    Implements a :class:`logging.Filter` to append the
-    current log context key items to the `LogRecord`.
+    Implements a logging.Filter to append the
+    current log context key items to the LogRecord.
     """
     def filter(self, record: logging.LogRecord) -> bool:
         logging_context = _LOG_CONTEXT.get()
@@ -149,8 +149,9 @@ def enable_log_context(log_prefix: Optional[str] = None):
     Enabling logging context also enables JSON formatting for the log messages. This
     is currently mandatory in order to use logging context.
 
-    :param log_prefix: Optional prefix to be added to all logs, shown as a prompt delimitied
-    by colon before the JSON message.
+    Args:
+        log_prefix (Optional[str]): Optional prefix to be added to all logs, shown as a
+            prompt delimited by colon before the JSON message.
     """
     json_formatter = json_logger.JsonFormatter(
         "%(name) %(levelname) %(asctime) %(message) %(funcName) %(lineno)",
@@ -193,16 +194,16 @@ class logcontext(AbstractContextManager, ContextDecorator):
 
     There are two ways you can enable a managed scope:
 
-    - Decorating your function with ``logcontext()`` (easiest and recommended)::
+    - Decorating your function with logcontext() (easiest and recommended):
 
-        logutils.logcontext()
+    Example::
+
+        @logcontext()
         def my_function():
-            ...
-            set_log_context(my_key='value')
-            ...
+            set_log_context(my_var='value')
 
     This method automatically generates a self-managed context applicable to the entire
-    function scope. You can use `set_log_context` and `unset_log_context` operations to
+    function scope. You can use set_log_contex() and unset_log_context() operations to
     add/remove keys, respectively, as needed.
 
     - Explicitly creating the scoped context anywhere in your code::
@@ -213,8 +214,8 @@ class logcontext(AbstractContextManager, ContextDecorator):
                 lc.set(my_key='value')
                 ...
 
-    Calling ``set_log_context()``/``unset_log_context()`` under the scope is equivalent
-    as ``lc.set()``/``lc.unset()``.
+    Calling `set_log_context()` and `unset_log_context()` under the scope is equivalent
+    as `lc.set()` and `lc.unset()`.
 
     The second method gives you more granularity defining the scopes at the expense of a
     bit more code overhead.
@@ -240,8 +241,9 @@ class logcontext(AbstractContextManager, ContextDecorator):
         override their value for the current context, and their previous value will be restored
         upon scope finalization.
 
-        :param kwargs: Custom keyword arguments representing the log keys. The value
-        can be anything that is JSON serializable.
+        Args:
+            kwargs: Custom keyword arguments representing the log keys. The value
+                can be anything that is JSON serializable.
         """
         for key, value in kwargs.items():
             if value is not None:
@@ -250,27 +252,30 @@ class logcontext(AbstractContextManager, ContextDecorator):
     def unset(self, *args):
         """
         Removes the specified comma-separated list of key values, represented as strings::
+
             lc.unset('key1', 'key2')
 
         Removing a key from the current scope does not remove it from its parent/outer scope if
         it also sets it there.
 
-        :param args: List of keys to be removed as string arguments.
+        Args:
+            args: List of keys to be removed as string arguments.
         """
         for key in args:
             self._log_context.pop(key)
 
 
 class asynclogcontext(AbstractAsyncContextManager, AsyncContextDecorator):
-    """
-    Same as ``logcontext`` but for use on ``async`` functions::
+    """Same as logcontext but for use on async functions.
+
+    Example::
 
         @asynclogcontext()
         async def my_async_function():
-            ...
-            set_log_context(...)
+            set_log_context(my_var='value')
 
-    See: logcontext
+    See:
+        `logcontext`
     """
     def __init__(self):
         self._mgr = logcontext()
@@ -293,7 +298,8 @@ def set_log_context(**kwargs):
     """
     Sets a list key items into the current log context.
 
-    See: logcontext::set
+    See:
+        logcontext::set
     """
     ctx_mgr: logcontext = _LOG_CONTEXT_MGR.get()
     ctx_mgr.set(**kwargs)
@@ -303,7 +309,8 @@ def unset_log_context(*args):
     """
     Removes a set of key items from the current log context.
 
-    See: logcontext::unset
+    See:
+        logcontext::unset
     """
     ctx_mgr: logcontext = _LOG_CONTEXT_MGR.get()
     ctx_mgr.unset(*args)

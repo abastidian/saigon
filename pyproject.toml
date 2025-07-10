@@ -39,31 +39,32 @@ orm = [
 rest = [
     "requests~=2.32.4"
 ]
-sftp = [
-    "paramiko~=3.5.1"
-]
 fastapi = [
     "fastapi~=0.115.6",
     "pyjwt~=2.10.1",
 ]
-all = [
-    "saigon[aws,orm,fastapi,sftp,rest]"
+backend = [
+    "saigon-py[aws,orm,fastapi,rest]"
 ]
 extras = [
-    "Jinja2~=3.1.5"
+    "Jinja2~=3.1.5",
+    "paramiko~=3.5.1"
 ]
-test = [
+dev = [
     "pytest~=8.3.5",
     "pytest_asyncio~=0.26.0",
     "python-dotenv~=1.0.1",
     "flake8~=7.1.1",
     "httpx~=0.28.1",
     "shellody~=0.14",
-    "prompt_toolkit~=3.0.51"
-]
-build = [
+    "prompt_toolkit~=3.0.51",
     "hatch==1.14.0",
     "twine==6.1.0"
+]
+docs = [
+    "sphinx~=8.2.3",
+    "sphinx_rtd_theme~=3.0.2",
+    "sphinx_autodoc_typehints~=3.2.0"
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -74,6 +75,7 @@ packages = ["src/saigon"]
 
 [project.urls]
 "Source Code" = "https://github.com/abastidian/saigon"
+"Documentation" = "https://saigon.readthedocs.io/en/latest/"
 
 [tool.hatch.envs.default]
 detached=true
@@ -82,4 +84,6 @@ path = ".venv"
 
 [tool.hatch.envs.default.scripts]
 lint = "saigon-lint"
+publish = "twine upload --repository pypi dist/saigon_py-{env:SAIGON_VERSION}*"
+publish-test = "twine upload --repository pypi dist/saigon_py_test-{env:SAIGON_VERSION}*"
 

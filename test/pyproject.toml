@@ -15,16 +15,12 @@ authors = [
   { name="abasitdian@gmail.com" },
 ]
 description = "Common components to build digital backends"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
-    "saigon-py[all,test]",
+    "saigon-py[backend,dev]",
 ]
 classifiers = [
     "Programming Language :: Python :: 3"
-]
-[project.optional-dependencies]
-build = [
-    "saigon[build]",
 ]
 
 [project.urls]

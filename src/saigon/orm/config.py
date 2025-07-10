@@ -8,7 +8,7 @@ from mypy_boto3_secretsmanager import SecretsManagerClient
 
 from pydantic import BaseModel
 
-from saigon.utils import Environment
+from ..utils import Environment
 
 __all__ = [
     'DbSecretCredentials',
@@ -19,7 +19,8 @@ __all__ = [
 
 
 class DbSecretCredentials(abc.ABC, BaseModel):
-    """Abstract base class for database secret credentials.
+    """
+    Abstract base class for database secret credentials.
 
     Defines the common attributes and abstract methods for various database
     types, ensuring a consistent interface for accessing connection details.
@@ -40,7 +41,8 @@ class DbSecretCredentials(abc.ABC, BaseModel):
 
     @property
     def host_url(self) -> str:
-        """Constructs the host URL (endpoint:port) for the database.
+        """
+        Constructs the host URL (endpoint:port) for the database.
 
         Returns:
             str: The host URL, e.g., "127.0.0.1:1024".
@@ -50,7 +52,8 @@ class DbSecretCredentials(abc.ABC, BaseModel):
     @property
     @abc.abstractmethod
     def db_url(self) -> str:
-        """Abstract method to construct the full database connection URL.
+        """
+        Abstract method to construct the full database connection URL.
 
         This method must be implemented by concrete subclasses to provide
         the specific URL format for their respective database types.
@@ -65,7 +68,8 @@ class DbSecretCredentials(abc.ABC, BaseModel):
 
 
 class PostgreSQLSecretCredentials(DbSecretCredentials):
-    """Concrete implementation of DbSecretCredentials for PostgreSQL databases.
+    """
+    Concrete implementation of DbSecretCredentials for PostgreSQL databases.
 
     Adds PostgreSQL-specific attributes like `ssl_mode` and provides the
     correct `db_url` format for PostgreSQL connections.
@@ -74,8 +78,8 @@ class PostgreSQLSecretCredentials(DbSecretCredentials):
         port (int): The default PostgreSQL port. Defaults to 5432.
         ssl_mode (str): The SSL mode for the PostgreSQL connection. Defaults to 'prefer'.
 
-    Example:
-        ```python
+    Example::
+
         pg_creds = PostgreSQLSecretCredentials(
             endpoint="my-pg-server",
             database="mydb",
@@ -86,7 +90,6 @@ class PostgreSQLSecretCredentials(DbSecretCredentials):
         )
         print(pg_creds.db_url)
         # Expected Output: postgresql+psycopg://pguser:pgpass@my-pg-server:5433/mydb?sslmode=require
-        ```
     """
     port: int = 5432
     ssl_mode: str = 'prefer'
@@ -106,15 +109,16 @@ class PostgreSQLSecretCredentials(DbSecretCredentials):
 
 
 class MySQLSecretCredentials(DbSecretCredentials):
-    """Concrete implementation of DbSecretCredentials for MySQL databases.
+    """
+    Concrete implementation of DbSecretCredentials for MySQL databases.
 
     Provides the correct `db_url` format for MySQL connections.
 
     Attributes:
         port (int): The default MySQL port. Defaults to 3306.
 
-    Example:
-        ```python
+    Example::
+
         mysql_creds = MySQLSecretCredentials(
             endpoint="my-mysql-server",
             database="mysq_db",
@@ -123,13 +127,13 @@ class MySQLSecretCredentials(DbSecretCredentials):
         )
         print(mysql_creds.db_url)
         # Expected Output: mysql+mysqlconnector://mysqluser:mysqlpass@my-mysql-server:3306/mysq_db
-        ```
     """
     port: int = 3306
 
     @property
     def db_url(self) -> str:
-        """Constructs the MySQL database connection URL.
+        """
+        Constructs the MySQL database connection URL.
 
         Returns:
             str: The full MySQL connection URL.
@@ -141,7 +145,8 @@ class MySQLSecretCredentials(DbSecretCredentials):
 
 
 class BaseDbEnv(Environment):
-    """Manages database environment variables, optionally loading credentials
+    """
+    Manages database environment variables, optionally loading credentials
     from AWS Secrets Manager.
 
     This class extends the `Environment` class to specifically handle database
@@ -154,45 +159,43 @@ class BaseDbEnv(Environment):
             AWS Secrets Manager secret containing the database credentials.
             If None, credentials are expected from environment variables.
 
-    Example:
-        Scenario 1: Loading from environment variables
-        ```python
-        # Assuming environment variables are set:
-        # export MYAPP_DB_ENDPOINT="localhost"
-        # export MYAPP_DB_PORT="5432"
-        # export MYAPP_DB_DATABASE="mydata"
-        # export MYAPP_DB_USERNAME="appuser"
-        # export MYAPP_DB_PASSWORD="secure_password"
+    Examples:
+        Scenario 1: Loading from environment variables::
 
-        class MyPostgreSqlEnv(BaseDbEnv):
-            pass
+            # Assuming environment variables are set
+            # export MYAPP_DB_ENDPOINT="localhost"
+            # export MYAPP_DB_PORT="5432"
+            # export MYAPP_DB_DATABASE="mydata"
+            # export MYAPP_DB_USERNAME="appuser"
+            # export MYAPP_DB_PASSWORD="secure_password"
 
-        db_env = MyPostgreSqlEnv(var_prefix="MYAPP")
-        print(db_env.db_credentials.db_url)
-        # Expected Output: postgresql+psycopg://appuser:secure_password@localhost:5432/mydata?sslmode=prefer
-        print(db_env.MYAPP_DB_USERNAME) # Direct access to loaded env var
-        ```
+            class MyPostgreSqlEnv(BaseDbEnv):
+                pass
 
-        Scenario 2: Loading from AWS Secrets Manager
-        ```python
-        # Assume a secret named 'my/database/credentials' exists in AWS Secrets Manager
-        # with content like:
-        # {
-        #   "endpoint": "db.example.com",
-        #   "port": 5432,
-        #   "database": "prod_db",
-        #   "username": "prod_user",
-        #   "password": "super_secret_password"
-        # }
+            db_env = MyPostgreSqlEnv(var_prefix="MYAPP")
+            print(db_env.db_credentials.db_url)
+            # Expected Output: postgresql+psycopg://appuser:secure_password@localhost:5432/mydata?sslmode=prefer
+            print(db_env.MYAPP_DB_USERNAME) # Direct access to loaded env var
 
-        class ProdDbEnv(BaseDbEnv):
-            DATABASE_CREDENTIALS_SECRET: Optional[str] = "my/database/credentials"
+        Scenario 2: Loading from AWS Secrets Manager::
 
-        # Requires AWS credentials configured (e.g., via ~/.aws/credentials or env vars)
-        prod_env = ProdDbEnv(var_prefix="PROD_APP")
-        print(prod_env.db_credentials.db_url)
-        # Expected Output: postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefer
-        ```
+            # Assume a secret named 'my/database/credentials' exists in AWS Secrets Manager
+            # with content like:
+            # {
+            #   "endpoint": "db.example.com",
+            #   "port": 5432,
+            #   "database": "prod_db",
+            #   "username": "prod_user",
+            #   "password": "super_secret_password"
+            # }
+
+            class ProdDbEnv(BaseDbEnv):
+                DATABASE_CREDENTIALS_SECRET: Optional[str] = "my/database/credentials"
+
+            # Requires AWS credentials configured (e.g., via ~/.aws/credentials or env vars)
+            prod_env = ProdDbEnv(var_prefix="PROD_APP")
+            print(prod_env.db_credentials.db_url)
+            # Expected Output: postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefer
     """
     DATABASE_CREDENTIALS_SECRET: Optional[str] = None
 
@@ -339,7 +342,7 @@ class BaseDbEnv(Environment):
                 from the `credentials_type`.
         """
         return [
-            name for name, _ in self._credentials_type.model_fields()
+            name for name in self._credentials_type.model_fields
         ]
 
     def _get_db_var(self, cred_attr: str) -> str:

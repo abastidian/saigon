@@ -9,3 +9,4 @@ exclude =
     dist
     pytest.ini
     conftest.py
+    __init__.py

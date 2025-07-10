@@ -1,4 +1,5 @@
 import os
+import sys
 
 from flake8.main import application
 
@@ -10,9 +11,11 @@ def run_flake8():
     app.initialize(
         [
             f"--config={CONFIG_PATH}/.flake8",
-            "--extend-exclude=test/integration/,test/unit/,test/e2e/,"
-            "test/__init__.py,test/conftest.py,conftest.py"
+            "--extend-exclude=test/integration/,test/unit/,test/e2e/"
+            ",test/conftest.py,conftest.py,__init__.py"
         ]
     )
     app.run_checks()
     app.report()
+    if app.result_count > 0:
+        sys.exit(1)

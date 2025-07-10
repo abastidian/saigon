@@ -49,3 +49,7 @@ Thumbs.db
 *.flv
 *.mov
 *.wmv
+
+# built docs
+docs/_build
+docs/html

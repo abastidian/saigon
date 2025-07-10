@@ -1,5 +1,6 @@
 import abc
 import os
+from pathlib import Path
 from contextlib import contextmanager
 from typing import (
     TypeVar,
@@ -18,6 +19,7 @@ from typing import (
 from pydantic import BaseModel, field_serializer, ConfigDict
 
 __all__ = [
+    'current_file_dir',
     'NameValueItem',
     'Environment',
     'NodeEntityType',
@@ -26,15 +28,19 @@ __all__ = [
 ]
 
 
-class NameValueItem(NamedTuple):
+def current_file_dir(filename: str) -> Path:
+    return Path(os.path.dirname(filename)).resolve()
+
+
+class NameValueItem[ValueType](NamedTuple):
     """Represents a simple name-value pair.
 
     Attributes:
         name (str): The name of the item.
-        value (Any): The value associated with the name.
+        value (ValueType): The value associated with the name.
     """
     name: str
-    value: Any
+    value: ValueType
 
 
 class Environment(abc.ABC, BaseModel):
@@ -49,24 +55,23 @@ class Environment(abc.ABC, BaseModel):
         model_config (ConfigDict): Pydantic configuration allowing extra fields.
 
     Example:
-        Consider a configuration for a database:
-        ```python
-        class DatabaseConfig(Environment):
-            HOST: str
-            PORT: int = 5432
-            USER: str
+        Consider a configuration for a database::
 
-        # If DB_HOST and DB_USER are set in environment variables
-        # e.g., export DB_HOST="localhost", export DB_USER="admin"
-        db_config = DatabaseConfig(PORT=5433)
-        print(db_config.HOST) # Output: 'localhost'
-        print(db_config.PORT) # Output: 5433
-        print(db_config.USER) # Output: 'admin'
+            class DatabaseConfig(Environment):
+                HOST: str
+                PORT: int = 5432
+                USER: str
 
-        # Set these values back to environment variables
-        db_config.setvars()
-        print(os.getenv('HOST')) # Output: 'localhost'
-        ```
+            # If DB_HOST and DB_USER are set in environment variables
+            # e.g., export DB_HOST="localhost", export DB_USER="admin"
+            db_config = DatabaseConfig(PORT=5433)
+            print(db_config.HOST) # Output: 'localhost'
+            print(db_config.PORT) # Output: 5433
+            print(db_config.USER) # Output: 'admin'
+
+            # Set these values back to environment variables
+            db_config.setvars()
+            print(os.getenv('HOST')) # Output: 'localhost'
     """
     model_config = ConfigDict(extra='allow')
 
@@ -127,8 +132,8 @@ class NodeEntity(BaseModel, Generic[NodeEntityType]):
         parent (Optional[Self]): The parent node in the hierarchy. Defaults to None.
         children (List[Self]): A list of child nodes. Defaults to an empty list.
 
-    Example:
-        ```python
+    Example::
+
         class Document(BaseModel):
             id: str
             name: str
@@ -155,7 +160,6 @@ class NodeEntity(BaseModel, Generic[NodeEntityType]):
         # Node: Root Document
         # Node: Child Document 1
         # Node: Child Document 2
-        ```
     """
     entity: NodeEntityType
     parent: Optional[Self] = None
@@ -208,7 +212,7 @@ class NodeEntity(BaseModel, Generic[NodeEntityType]):
 
 
 @runtime_checkable
-class EventHandler(Protocol[Any, Any]):
+class EventHandler[InputData, OutputData](Protocol):
     """Defines a protocol for event handlers.
 
     An `EventHandler` is designed to process input data within a context,
@@ -221,8 +225,8 @@ class EventHandler(Protocol[Any, Any]):
         InputData: The type of data expected as input to the event.
         OutputData: The type of data yielded as output from the event.
 
-    Example:
-        ```python
+    Example::
+
         class FileProcessor(EventHandler[str, bytes]):
             @contextmanager
             def on_event(self, filepath: str) -> Generator[bytes, Any, Any]:
@@ -243,12 +247,12 @@ class EventHandler(Protocol[Any, Any]):
         # Opening file: my_document.txt
         # Processing content (first 10 bytes): b'...'
         # Closing file: my_document.txt
-        ```
     """
     @abc.abstractmethod
     @contextmanager
-    def on_event(self, input_data: Any) -> Generator[Any, Any, Any]:
-        """An abstract context manager method for handling events.
+    def on_event(self, input_data: InputData) -> Generator[OutputData]:
+        """
+        An abstract context manager method for handling events.
 
         This method defines the core logic for an event handler,
         providing a context for processing input data and yielding output data.

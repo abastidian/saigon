@@ -151,7 +151,7 @@ class RestClientBase:
         """
         target_port = service_port if service_port else self._service_port
         return (
-            self._service_url + f":{target_port}" if target_port else '' + self._api_prefix
+            self._service_url + (f":{target_port}" if target_port else '') + self._api_prefix
         )
 
     @cached_property
