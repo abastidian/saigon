@@ -1,20 +1,67 @@
-from typing import Type, Optional
+from typing import Type, Optional, override
 
 import boto3
 from mypy_boto3_secretsmanager.client import SecretsManagerClient
 
-from ..model import ModelTypeDef
+from pydantic import BaseModel
+
+from ..interface import SecretVault
+from ..orm.config import *
 
 __all__ = [
+    'AwsSecretVault',
+    'AwsBaseDbEnv',
     'get_secret_as_model'
 ]
 
 
-def get_secret_as_model(
-        model_type: Type[ModelTypeDef],
+class AwsSecretVault(SecretVault):
+    """
+    Concrete implementation of `SecretVault` that uses boto3 SecretsManager
+    """
+    def __init__(
+            self, secrets_client: Optional[SecretsManagerClient] = None
+    ):
+        self._secrets_client = (
+            secrets_client if secrets_client
+            else boto3.client('secretsmanager')
+        )
+
+    @override
+    def get_secret[SecretModel: BaseModel](
+            self,
+            secret_model: Type[SecretModel],
+            secret_key: str
+    ) -> SecretModel:
+        return get_secret_as_model(
+            secret_model, secret_key, self._secrets_client
+        )
+
+
+class AwsBaseDbEnv(BaseDbEnv):
+    """
+    Subclass of `BaseDbEnv` that provides `AwsSecretVault` as provider to access
+    the DB secret.
+    """
+    def __init__(
+            self,
+            var_prefix: str,
+            credentials_type: Type[DbCredentials] = PostgreSQLCredentials,
+            **kwargs
+    ):
+        super().__init__(
+            var_prefix,
+            credentials_type,
+            AwsSecretVault(),
+            **kwargs
+        )
+
+
+def get_secret_as_model[SecretModel: BaseModel](
+        model_type: Type[SecretModel],
         secret_name: str,
         secrets_client: Optional[SecretsManagerClient] = None
-) -> ModelTypeDef:
+) -> SecretModel:
     """Retrieves a secret from AWS Secrets Manager and deserializes it into a Pydantic model.
 
     This function fetches the secret string from Secrets Manager and then uses

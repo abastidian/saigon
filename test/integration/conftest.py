@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import Table
 
 from saigon.orm.connection import DbConnector, AbstractDbManager
-from saigon.orm.config import PostgreSQLSecretCredentials
+from saigon.orm.config import PostgreSQLCredentials
 
 load_dotenv(
     dotenv_path=f"{pathlib.Path(__file__).parent.resolve()}/../../.env-dev"
@@ -26,7 +26,7 @@ class TestDbManager(AbstractDbManager):
 
 @pytest.fixture(scope='session')
 def db_connector() -> DbConnector:
-    return DbConnector(PostgreSQLSecretCredentials())
+    return DbConnector(PostgreSQLCredentials())
 
 
 @pytest.fixture(scope='session')

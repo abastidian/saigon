@@ -7,19 +7,19 @@ from typing import (
     Generic,
     Optional,
     NamedTuple,
-    Any,
     Self,
     List,
     Callable,
     Protocol,
     Generator,
-    runtime_checkable
+    runtime_checkable,
+    Any,
 )
 
 from pydantic import BaseModel, field_serializer, ConfigDict
 
 __all__ = [
-    'current_file_dir',
+    'get_file_dir',
     'NameValueItem',
     'Environment',
     'NodeEntityType',
@@ -28,7 +28,7 @@ __all__ = [
 ]
 
 
-def current_file_dir(filename: str) -> Path:
+def get_file_dir(filename: str) -> Path:
     return Path(os.path.dirname(filename)).resolve()
 
 
@@ -97,7 +97,7 @@ class Environment(abc.ABC, BaseModel):
         """
         return {
             var: value
-            for var, _ in self.model_fields.items()
+            for var, _ in self.__class__.model_fields.items()
             if (value := kwargs.get(var, os.getenv(var)))
         }
 
@@ -111,7 +111,7 @@ class Environment(abc.ABC, BaseModel):
         Returns:
             Self: The current instance, allowing for method chaining.
         """
-        for var, _ in self.model_fields.items():
+        for var, _ in self.__class__.model_fields.items():
             if value := getattr(self, var):
                 os.environ[var] = str(value)
 

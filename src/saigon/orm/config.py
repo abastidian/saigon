@@ -1,26 +1,24 @@
 import abc
 import os
-from typing import Optional, List, Type
+from typing import Optional, List, Type, override
 from functools import cached_property
-
-import boto3
-from mypy_boto3_secretsmanager import SecretsManagerClient
 
 from pydantic import BaseModel
 
 from ..utils import Environment
+from ..interface import SecretVault
 
 __all__ = [
-    'DbSecretCredentials',
-    'PostgreSQLSecretCredentials',
-    'MySQLSecretCredentials',
+    'DbCredentials',
+    'PostgreSQLCredentials',
+    'MySQLCredentials',
     'BaseDbEnv'
 ]
 
 
-class DbSecretCredentials(abc.ABC, BaseModel):
+class DbCredentials(abc.ABC, BaseModel):
     """
-    Abstract base class for database secret credentials.
+    Abstract base class for database credentials.
 
     Defines the common attributes and abstract methods for various database
     types, ensuring a consistent interface for accessing connection details.
@@ -67,9 +65,9 @@ class DbSecretCredentials(abc.ABC, BaseModel):
         raise NotImplementedError
 
 
-class PostgreSQLSecretCredentials(DbSecretCredentials):
+class PostgreSQLCredentials(DbCredentials):
     """
-    Concrete implementation of DbSecretCredentials for PostgreSQL databases.
+    Concrete implementation of DbCredentials for PostgreSQL databases.
 
     Adds PostgreSQL-specific attributes like `ssl_mode` and provides the
     correct `db_url` format for PostgreSQL connections.
@@ -95,6 +93,7 @@ class PostgreSQLSecretCredentials(DbSecretCredentials):
     ssl_mode: str = 'prefer'
 
     @property
+    @override
     def db_url(self) -> str:
         """Constructs the PostgreSQL database connection URL.
 
@@ -108,9 +107,9 @@ class PostgreSQLSecretCredentials(DbSecretCredentials):
         )
 
 
-class MySQLSecretCredentials(DbSecretCredentials):
+class MySQLCredentials(DbCredentials):
     """
-    Concrete implementation of DbSecretCredentials for MySQL databases.
+    Concrete implementation of DbCredentials for MySQL databases.
 
     Provides the correct `db_url` format for MySQL connections.
 
@@ -131,6 +130,7 @@ class MySQLSecretCredentials(DbSecretCredentials):
     port: int = 3306
 
     @property
+    @override
     def db_url(self) -> str:
         """
         Constructs the MySQL database connection URL.
@@ -147,20 +147,50 @@ class MySQLSecretCredentials(DbSecretCredentials):
 class BaseDbEnv(Environment):
     """
     Manages database environment variables, optionally loading credentials
-    from AWS Secrets Manager.
+    from a concrete `SecretVault`.
 
     This class extends the `Environment` class to specifically handle database
-    connection details. It can retrieve credentials either from environment
-    variables (prefixed by `var_prefix` + `_DB_`) or from a specified
-    AWS Secrets Manager secret.
-
-    Attributes:
-        DATABASE_CREDENTIALS_SECRET (Optional[str]): The ARN or name of the
-            AWS Secrets Manager secret containing the database credentials.
-            If None, credentials are expected from environment variables.
+    connection details. It can retrieve credentials from the following methods, and
+    this order:
+     - full json object specified in {var_prefix}_DATABASE_CREDENTIALS
+     - Secret with key specified in {var_prefix}_DATABASE_CREDENTIALS_SECRET and
+       fetch through the specified concrete `SecretVault`
+     - environment variables (prefixed by `var_prefix` + `_DB_`)
 
     Examples:
-        Scenario 1: Loading from environment variables::
+         Scenario 1: Loading from a JSON variable::
+            # Assume an environment variable MYAPP_DATABASE_CREDENTIALS is defined with
+            # the following content
+            # json({
+            #   "endpoint": "db.example.com",
+            #   "port": 5432,
+            #   "database": "prod_db",
+            #   "username": "prod_user",
+            #   "password": "super_secret_password"
+            # })
+
+            class MyAppDbEnv(BaseDbEnv):
+                MYAPP_DATABASE_CREDENTIALS: str
+
+            prod_env = MyAppDbEnv("MY_APP")
+            print(prod_env.db_credentials.db_url)
+            # Expected Output:
+            # postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefe
+
+        Scenario 2: Loading from AWS Secrets Manager::
+            # Consider the same credentials json from the previous scenario that is now
+            # stored in a AWS SecretsManager, whose secret name is provided through the
+            # environment variable MYAPP_DATABASE_CREDENTIALS_SECRET:
+
+            class MyAppDbEnv(BaseDbEnv):
+                MYAPP_DATABASE_CREDENTIALS_SECRET: str = "my/database/credentials"
+
+            prod_env = MyAppDbEnv("PROD_APP", AwsSecretVault())
+            print(prod_env.db_credentials.db_url)
+            # Expected Output:
+            # postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefer
+
+        Scenario 3: Loading from environment variables::
 
             # Assuming environment variables are set
             # export MYAPP_DB_ENDPOINT="localhost"
@@ -174,35 +204,15 @@ class BaseDbEnv(Environment):
 
             db_env = MyPostgreSqlEnv(var_prefix="MYAPP")
             print(db_env.db_credentials.db_url)
-            # Expected Output: postgresql+psycopg://appuser:secure_password@localhost:5432/mydata?sslmode=prefer
-            print(db_env.MYAPP_DB_USERNAME) # Direct access to loaded env var
-
-        Scenario 2: Loading from AWS Secrets Manager::
-
-            # Assume a secret named 'my/database/credentials' exists in AWS Secrets Manager
-            # with content like:
-            # {
-            #   "endpoint": "db.example.com",
-            #   "port": 5432,
-            #   "database": "prod_db",
-            #   "username": "prod_user",
-            #   "password": "super_secret_password"
-            # }
-
-            class ProdDbEnv(BaseDbEnv):
-                DATABASE_CREDENTIALS_SECRET: Optional[str] = "my/database/credentials"
-
-            # Requires AWS credentials configured (e.g., via ~/.aws/credentials or env vars)
-            prod_env = ProdDbEnv(var_prefix="PROD_APP")
-            print(prod_env.db_credentials.db_url)
-            # Expected Output: postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefer
+            # Expected Output:
+            # postgresql+psycopg://appuser:secure_password@localhost:5432/mydata?sslmode=prefer
     """
-    DATABASE_CREDENTIALS_SECRET: Optional[str] = None
 
     def __init__(
             self,
             var_prefix: str,
-            credentials_type: Type[DbSecretCredentials] = PostgreSQLSecretCredentials,
+            credentials_type: Type[DbCredentials] = PostgreSQLCredentials,
+            secret_vault: Optional[SecretVault] = None,
             **kwargs
     ):
         """Initializes the BaseDbEnv instance.
@@ -210,7 +220,10 @@ class BaseDbEnv(Environment):
         Args:
             var_prefix (str): The prefix used for environment variables
                 related to the database (e.g., "MYAPP" would look for MYAPP_DB_ENDPOINT).
-            credentials_type (Type[DbSecretCredentials]): The type of database
+            secret_vault (SecretVault): Concrete implementation of a SecretVault in order
+                to read the DB credentials from a remote store. Required when
+                MYAPP_DB_CREDENTIALS_SECRET is present.
+            credentials_type (Type[DbCredentials]): The type of database
                 credentials to expect and load (e.g., PostgreSQLSecretCredentials,
                 MySQLSecretCredentials). Defaults to PostgreSQLSecretCredentials.
             **kwargs: Additional keyword arguments to pass to the parent
@@ -218,25 +231,35 @@ class BaseDbEnv(Environment):
         """
         super().__init__(**kwargs)
         self._var_prefix = var_prefix
-        self._credentials_type = credentials_type
+        self._secret_vault = secret_vault
+        self._credentials_type: Type[DbCredentials] = credentials_type
 
-        db_credentials = (
-            self.get_credentials_from_secret() if self.DATABASE_CREDENTIALS_SECRET
-            else self._db_credentials_from_vars(kwargs)
-        )
+        # Check if credentials are provided directly through variable
+        credentials_var = f"{var_prefix}_DATABASE_CREDENTIALS"
+        credentials_secret_var = f"{var_prefix}_DATABASE_CREDENTIALS_SECRET"
+        if hasattr(self, credentials_var):
+            credentials_json = self.__getattr__(credentials_var)
+            db_credentials = credentials_type.model_validate_json(credentials_json)
+        elif hasattr(self, credentials_secret_var):
+            db_credentials = self.get_credentials_from_secret(
+                self.__getattr__(credentials_secret_var)
+            )
+        else:
+            db_credentials = self._db_credentials_from_vars(kwargs)
+
         # Set the loaded credentials as attributes on self with the correct prefixed names
         self._set_db_vars_from_credentials(db_credentials)
 
     @property
-    def db_credentials(self) -> DbSecretCredentials:
+    def db_credentials(self) -> DbCredentials:
         """Provides the database credentials as an object of `credentials_type`.
 
-        This property dynamically constructs the `DbSecretCredentials` object
+        This property dynamically constructs the `DbCredentials` object
         from the environment variables currently loaded into this `BaseDbEnv`
         instance.
 
         Returns:
-            DbSecretCredentials: An instance of the configured
+            DbCredentials: An instance of the configured
                 `credentials_type` populated with database details.
         """
         return self._db_credentials_from_vars(
@@ -246,37 +269,33 @@ class BaseDbEnv(Environment):
             }
         )
 
-    def get_credentials_from_secret(self) -> DbSecretCredentials:
-        """Retrieves database credentials from AWS Secrets Manager.
+    def get_credentials_from_secret(self, secret_key: str) -> DbCredentials:
+        """Retrieves database credentials from the installed `SecretVault`.
 
-        Assumes the `DATABASE_CREDENTIALS_SECRET` attribute is set.
         The secret's value is expected to be a JSON string that can be
         parsed into the specified `credentials_type`.
 
         Requires AWS SDK (boto3) to be configured with appropriate permissions.
 
+        Args:
+            secret_key (str): The secret key identifier to fetch the credentials from
         Returns:
-            DbSecretCredentials: An instance of `credentials_type` populated
+            DbCredentials: An instance of `credentials_type` populated
                 from the secret.
 
         Raises:
-            Exception: If `DATABASE_CREDENTIALS_SECRET` is not set or secret
-                retrieval fails.
+            Exception: If no  `SecretVault` is set
         """
-        if not self.DATABASE_CREDENTIALS_SECRET:
+        if self._secret_vault is None:
             raise ValueError(
-                "DATABASE_CREDENTIALS_SECRET must be set to retrieve credentials "
-                "from Secrets Manager."
+                'SecretVault implementation required when setting credentials secret'
             )
-        secrets_client: SecretsManagerClient = boto3.client('secretsmanager')
-        get_secret_response = secrets_client.get_secret_value(
-            SecretId=self.DATABASE_CREDENTIALS_SECRET
-        )
-        return self._credentials_type.model_validate_json(
-            get_secret_response['SecretString']
+
+        return self._secret_vault.get_secret(
+            self._credentials_type, secret_key
         )
 
-    def _set_db_vars_from_credentials(self, credentials: DbSecretCredentials):
+    def _set_db_vars_from_credentials(self, credentials: DbCredentials):
         """Internal method to set instance attributes from a credentials object.
 
         Each attribute of the `credentials` object is mapped to an instance
@@ -284,18 +303,18 @@ class BaseDbEnv(Environment):
         Existing environment variables for these prefixed names take precedence.
 
         Args:
-            credentials (DbSecretCredentials): The credentials object from which
+            credentials (DbCredentials): The credentials object from which
                 to populate the instance's attributes.
         """
         for cred_attr in self._credential_attrs:
             db_var = self._get_db_var(cred_attr)
             value = (
                 env_value if (env_value := os.getenv(db_var))
-                else getattr(credentials, cred_attr) # Use getattr for direct attribute access
+                else getattr(credentials, cred_attr)  # Use getattr for direct attribute access
             )
             setattr(self, db_var, value)
 
-    def _db_credentials_from_vars(self, db_vars: dict) -> DbSecretCredentials:
+    def _db_credentials_from_vars(self, db_vars: dict) -> DbCredentials:
         """Internal method to create a credentials object from a dictionary of variables.
 
         Args:
@@ -304,7 +323,7 @@ class BaseDbEnv(Environment):
                 values are their corresponding values.
 
         Returns:
-            DbSecretCredentials: An instance of `credentials_type` created
+            DbCredentials: An instance of `credentials_type` created
                 from the provided dictionary.
         """
         return self._credentials_type(
@@ -342,7 +361,7 @@ class BaseDbEnv(Environment):
                 from the `credentials_type`.
         """
         return [
-            name for name in self._credentials_type.model_fields
+            name for name, _ in self._credentials_type.model_fields.items()
         ]
 
     def _get_db_var(self, cred_attr: str) -> str:

@@ -13,6 +13,58 @@ from mypy_boto3_cognito_identity.client import CognitoIdentityClient
 
 from pydantic import BaseModel
 
+from ..fastapi.headers import custom_request_context
+
+__all__ = [
+    'AWS_COGNITO_IAM_AUTH_PROVIDER_HEADER_NAME',
+    'get_user_pool_identity_from_iam_auth_provider',
+    'CognitoRequestContext',
+    'CognitoIdpConfig',
+    'CognitoIdp',
+    'CognitoClientConfig',
+    'CognitoClient'
+]
+
+AWS_COGNITO_IAM_AUTH_PROVIDER_HEADER_NAME = 'X-Cognito-AuthProvider'
+
+
+def get_user_pool_identity_from_iam_auth_provider(
+        iam_auth_provider: str
+) -> uuid.UUID:
+    """Extracts the user pool identity (UUID) from the 'X-Cognito-AuthProvider' header.
+
+    This function parses the AWS Cognito IAM Auth Provider header string to
+    isolate and return the UUID representing the user's identity within
+    the Cognito User Pool.
+
+    Args:
+        iam_auth_provider (str): The value of the 'X-Cognito-AuthProvider' header,
+            injected by FastAPI. Expected format is
+            'cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID},cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID}:CognitoSignIn:${USER_POOL_IDENTITY}'.
+
+    Returns:
+        uuid.UUID: The UUID of the user pool identity.
+    """
+    """
+    Expected format:
+    cognito-idp.${REGION}.amazonaws.com/eu-west-1_aaaaaaaaa,\
+    cognito-idp.${REGION}.amazonaws.com/eu-west-1_aaaaaaaaa:CognitoSignIn:${USER_POOL_IDENTITY}
+    """
+    return uuid.UUID(iam_auth_provider.rsplit(':', maxsplit=1)[-1])
+
+
+CognitoRequestContext = custom_request_context(
+    'CognitoRequestContext',
+    identity_id_alias=AWS_COGNITO_IAM_AUTH_PROVIDER_HEADER_NAME,
+    identity_id_validator=(
+        lambda value: value if isinstance(value, uuid.UUID)
+        else (
+            get_user_pool_identity_from_iam_auth_provider(value) if value
+            else None
+        )
+    )
+)
+
 
 class CognitoIdpConfig(BaseModel):
     """Configuration for a Cognito Identity Provider (IdP) client.
@@ -32,6 +84,7 @@ class CognitoIdp:
     This class provides methods for managing users within a Cognito User Pool,
     such as creating, deleting, and confirming users.
     """
+
     def __init__(self, config: CognitoIdpConfig):
         """Initializes the CognitoIdp client.
 
@@ -69,13 +122,13 @@ class CognitoIdp:
                 Defaults to None.
             temporary_password (str): A temporary password for the new user. If None,
                 Cognito generates one (and sends it if `notify_user` is True). Defaults to None.
-            extra_user_attrs (Dict): A dictionary of additional user attributes (e.g., 'given_name', 'family_name').
-                Defaults to an empty immutable mapping.
+            extra_user_attrs (Dict): A dictionary of additional user attributes
+                (e.g., 'given_name', 'family_name').Defaults to an empty immutable mapping.
 
         Returns:
             Tuple[uuid.UUID, bool]: A tuple where the first element is the UUID of the user,
-                and the second element is a boolean indicating whether the user already existed (True)
-                or was newly created (False).
+                and the second element is a boolean indicating whether the user already
+                existed (True) or was newly created (False).
         """
         already_exists = False
         try:
@@ -123,7 +176,7 @@ class CognitoIdp:
             user_attributes = response['User']['Attributes']
 
             # Assign user to group
-            if group_name: # Added check for group_name
+            if group_name:  # Added check for group_name
                 self._idp_client.admin_add_user_to_group(
                     UserPoolId=self._config.user_pool_id,
                     Username=username,
@@ -197,6 +250,7 @@ class CognitoClient(CognitoIdp):
     (login) and obtaining temporary AWS IAM credentials from Identity Pools
     using the authenticated user's ID token.
     """
+
     def __init__(self, config: CognitoClientConfig):
         """Initializes the CognitoClient.
 
@@ -225,9 +279,10 @@ class CognitoClient(CognitoIdp):
         Args:
             username (str): The username of the user.
             password (str): The user's password.
-            new_password (str | None): A new password required if the user's password needs to be changed
-                (e.g., for a temporary password). If None and a new password is required,
-                the original password is used again for the new password. Defaults to None.
+            new_password (str | None): A new password required if the user's password needs
+                to be changed (e.g., for a temporary password). If None and a new
+                password is required, the original password is used again for the new password.
+                Defaults to None.
 
         Returns:
             AuthenticationResultTypeTypeDef: A dictionary containing the authentication result,

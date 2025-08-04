@@ -44,7 +44,7 @@ fastapi = [
     "pyjwt~=2.10.1",
 ]
 backend = [
-    "saigon-py[aws,orm,fastapi,rest]"
+    "saigon-py[orm,fastapi,rest]"
 ]
 extras = [
     "Jinja2~=3.1.5",
@@ -84,6 +84,13 @@ path = ".venv"
 
 [tool.hatch.envs.default.scripts]
 lint = "saigon-lint"
-publish = "twine upload --repository pypi dist/saigon_py-{env:SAIGON_VERSION}*"
-publish-test = "twine upload --repository pypi dist/saigon_py_test-{env:SAIGON_VERSION}*"
+docs = "cd test && python -m sphinx -T -b html -d _build/doctrees -D language=en . html"
+package = [
+    "hatch build",
+    "cd test && hatch build"
+]
+publish = [
+    "twine upload --repository pypi dist/saigon_py-`hatch version`*",
+    "twine upload --repository pypi dist/saigon_py_test-`hatch version`*"
+]
 

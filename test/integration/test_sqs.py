@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 import sqlalchemy
 
-from saigon.aws.sqs import SqsToRdsForwarder, SqlStatementBuilder
+from saigon.aws.flow.sqs import SqsToRdsForwarder, SqlStatementBuilder
 
 
 class TestMessage(BaseModel):

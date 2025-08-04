@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-dependency-coversion"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
@@ -12,12 +12,13 @@ path = "../src/saigon/__init__.py"
 name = "saigon-py-test"
 dynamic = ["version"]
 authors = [
-  { name="abasitdian@gmail.com" },
+  { name="abastidian@gmail.com" },
 ]
 description = "Common components to build digital backends"
 requires-python = ">=3.13"
 dependencies = [
-    "saigon-py[backend,dev]",
+    "saigon-py[backend,aws,dev]",
+    "psycopg~=3.2.9"
 ]
 classifiers = [
     "Programming Language :: Python :: 3"
@@ -25,6 +26,11 @@ classifiers = [
 
 [project.urls]
 "Source Code" = "https://github.com/abastidian/saigon"
+
+# Indicates to match the same version. This eliminates the
+# need to explicitly set the version to this project's version
+[tool.hatch.metadata.hooks.dependency-coversion]
+override-versions-of = ["saigon-py"]
 
 [tool.hatch.build.targets.sdist]
 include = ["saigon_test"]

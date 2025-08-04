@@ -17,7 +17,7 @@ from ..model import (
     ModelTypeDef,
     QueryDataResult,
 )
-from .config import DbSecretCredentials
+from .config import DbCredentials
 from .model import row_mapping_to_model_data
 
 __all__ = [
@@ -53,11 +53,11 @@ class DbConnector:
     fetching results, and reflecting database metadata. It also integrates
     with a context variable for managing transactional connections.
     """
-    def __init__(self, credentials: DbSecretCredentials):
+    def __init__(self, credentials: DbCredentials):
         """Instantiates a SQLAlchemy engine with the given database credentials.
 
         Args:
-            credentials (DbSecretCredentials): An object containing the database
+            credentials (DbCredentials): An object containing the database
                 connection details (e.g., `PostgreSQLSecretCredentials`).
         """
         self._engine_config = {
@@ -353,11 +353,17 @@ class AbstractDbManager(abc.ABC):
             def build_user_select(query_selection: Optional[UserQuery]) -> sqlalchemy.Select:
                 stmt = select(users_table)
                 if query_selection and query_selection.name_starts_with:
-                    stmt = stmt.where(users_table.c.name.startswith(query_selection.name_starts_with))
+                    stmt = stmt.where(users_table.c.name.startswith(
+                    query_selection.name_starts_with)
+                    )
                 return stmt
 
             def row_to_user_model(row_mapping: RowMapping) -> User:
-                return User(id=row_mapping['id'], name=row_mapping['name'], email=row_mapping['email'])
+                return User(
+                    id=row_mapping['id'],
+                    name=row_mapping['name'],
+                    email=row_mapping['email']
+                )
 
             # Assuming db_manager is an instance of AbstractDbManager
             # db_manager = MyDbManager(db_connector=DbConnector(credentials))
@@ -572,10 +578,14 @@ def transactional(func: Callable) -> Callable:
             @transactional
             def add_user_and_log(self, user_name: str, log_message: str):
                 # Both operations will be part of the same transaction
-                insert_stmt = sqlalchemy.text("INSERT INTO users (name) VALUES (:name)").bindparams(name=user_name)
+                insert_stmt = sqlalchemy.text(
+                    "INSERT INTO users (name) VALUES (:name)"
+                ).bindparams(name=user_name)
                 self.db_connector.execute(insert_stmt)
 
-                log_stmt = sqlalchemy.text("INSERT INTO logs (message) VALUES (:message)").bindparams(message=log_message)
+                log_stmt = sqlalchemy.text(
+                    "INSERT INTO logs (message) VALUES (:message)"
+                ).bindparams(message=log_message)
                 self.db_connector.execute(log_stmt)
                 print(f"User '{user_name}' added and log '{log_message}' recorded.")
 

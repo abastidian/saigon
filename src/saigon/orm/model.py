@@ -6,6 +6,13 @@ import sqlalchemy
 
 ModelType = TypeVar('ModelType', bound=BaseModel)
 
+__all__ = [
+    'filter_unknown_model_fields',
+    'model_data_to_row_values',
+    'row_mapping_to_model_data',
+    'row_to_model_data',
+]
+
 
 def filter_unknown_model_fields(
     model_type: Type[ModelType], model_data: Mapping[str, Any]
@@ -61,7 +68,8 @@ def model_data_to_row_values(
         exclude_none: bool = True,
         **extra: Any
 ) -> Dict[str, str]:
-    """Converts a Pydantic model instance into a dictionary suitable for database row insertion/update.
+    """Converts a Pydantic model instance into a dictionary suitable for database row
+    insertion/update.
 
     Serializes the model's data into a dictionary, with all values converted to
     strings, except for dictionaries, booleans, and lists which are kept as their
@@ -199,3 +207,11 @@ def row_mapping_to_model_data(
             **kwargs
         )
     )
+
+
+def row_to_model_data(
+        model_type: Type[ModelType],
+        row: sqlalchemy.Row,
+        **kwargs: Any
+) -> ModelType:
+    return row_mapping_to_model_data(model_type, row._mapping, **kwargs)

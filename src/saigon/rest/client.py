@@ -25,6 +25,13 @@ RequestContentTypeDef = TypeVar('RequestContentTypeDef', bound=BaseModel)
 ResponseContentTypeDef = TypeVar('ResponseContentTypeDef', bound=BaseModel)
 
 
+__all__ = [
+    'SigV4Credentials',
+    'RestClientBase',
+    'BackendRestClient'
+]
+
+
 class SigV4Credentials(BaseModel):
     """Represents AWS Signature Version 4 credentials.
 
@@ -48,7 +55,8 @@ class SigV4Credentials(BaseModel):
 
         Args:
             credentials (CredentialsTypeDef): A dictionary containing AWS credentials,
-                typically obtained from boto3 (e.g., Cognito Identity `get_credentials_for_identity`).
+                typically obtained from boto3
+                (e.g., Cognito Identity `get_credentials_for_identity`).
 
         Returns:
             Self: A new `SigV4Credentials` instance.
@@ -67,6 +75,7 @@ class RestClientBase:
     waiting for conditions, and handling S3 pre-signed URL uploads.
     It can be extended for specific backend services and authentication mechanisms.
     """
+
     def __init__(
             self,
             service_url: str,
@@ -151,7 +160,9 @@ class RestClientBase:
         """
         target_port = service_port if service_port else self._service_port
         return (
-            self._service_url + (f":{target_port}" if target_port else '') + self._api_prefix
+            self._service_url
+            + (f":{target_port}" if target_port else '')
+            + self._api_prefix
         )
 
     @cached_property
@@ -290,10 +301,12 @@ class RestClientBase:
             method (str): The HTTP method (e.g., 'GET', 'POST').
             endpoint (str): The API endpoint path.
             params (Optional[dict]): A dictionary of URL query parameters. Defaults to None.
-            extra_headers (Optional[dict]): A dictionary of additional HTTP headers. Defaults to None.
-            content (Optional[dict]): The request body content as a dictionary. It will be JSON-encoded.
+            extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
                 Defaults to None.
-            service_port (Optional[int]): A specific port to use for this request. Defaults to None.
+            content (Optional[dict]): The request body content as a dictionary.
+                It will be JSON-encoded. Defaults to None.
+            service_port (Optional[int]): A specific port to use for this request.
+                Defaults to None.
 
         Returns:
             AWSRequest: The constructed and potentially signed AWSRequest object.
@@ -345,11 +358,15 @@ class RestClientBase:
             method (str): The HTTP method (e.g., 'GET', 'POST').
             endpoint (str): The API endpoint path.
             params (Optional[dict]): A dictionary of URL query parameters. Defaults to None.
-            extra_headers (Optional[dict]): A dictionary of additional HTTP headers. Defaults to None.
-            content (Optional[RequestContentTypeDef]): The request body content. Defaults to None.
+            extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
+                Defaults to None.
+            content (Optional[RequestContentTypeDef]): The request body content.
+                Defaults to None.
             response_type (Optional[Type[ResponseContentTypeDef]]): The Pydantic model type
-                for the response. If None, `EmptyResponseBody` is returned. Defaults to None.
-            service_port (Optional[int]): A specific port to use for this request. Defaults to None.
+                for the response. If None, `EmptyResponseBody` is returned.
+                Defaults to None.
+            service_port (Optional[int]): A specific port to use for this request.
+                Defaults to None.
 
         Returns:
             Union[ResponseContentTypeDef, EmptyResponseBody]: An instance of the
@@ -391,8 +408,9 @@ class BackendRestClient(RestClientBase):
     This client is configured with a specific ALB DNS, service port, and API version,
     tailored for a typical backend service deployment.
     """
+
     def __init__(
-        self, alb_dns: str, service_port: int, api_version: str
+            self, alb_dns: str, service_port: int, api_version: str
     ):
         """Initializes the BackendRestClient.
 
@@ -414,6 +432,7 @@ class AuthRestClient(RestClientBase):
     via Cognito and automatically sign all outgoing requests with AWS SigV4,
     using temporary IAM credentials obtained from Cognito.
     """
+
     def __init__(
             self,
             api_base_url: str,
