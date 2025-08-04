@@ -174,7 +174,8 @@ class BaseDbEnv(Environment):
 
             db_env = MyPostgreSqlEnv(var_prefix="MYAPP")
             print(db_env.db_credentials.db_url)
-            # Expected Output: postgresql+psycopg://appuser:secure_password@localhost:5432/mydata?sslmode=prefer
+            # Expected Output:
+            # postgresql+psycopg://appuser:secure_password@localhost:5432/mydata?sslmode=prefer
             print(db_env.MYAPP_DB_USERNAME) # Direct access to loaded env var
 
         Scenario 2: Loading from AWS Secrets Manager::
@@ -195,7 +196,8 @@ class BaseDbEnv(Environment):
             # Requires AWS credentials configured (e.g., via ~/.aws/credentials or env vars)
             prod_env = ProdDbEnv(var_prefix="PROD_APP")
             print(prod_env.db_credentials.db_url)
-            # Expected Output: postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefer
+            # Expected Output:
+            # postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefer
     """
     DATABASE_CREDENTIALS_SECRET: Optional[str] = None
 
@@ -218,7 +220,7 @@ class BaseDbEnv(Environment):
         """
         super().__init__(**kwargs)
         self._var_prefix = var_prefix
-        self._credentials_type = credentials_type
+        self._credentials_type: Type[DbSecretCredentials] = credentials_type
 
         db_credentials = (
             self.get_credentials_from_secret() if self.DATABASE_CREDENTIALS_SECRET
@@ -291,7 +293,7 @@ class BaseDbEnv(Environment):
             db_var = self._get_db_var(cred_attr)
             value = (
                 env_value if (env_value := os.getenv(db_var))
-                else getattr(credentials, cred_attr) # Use getattr for direct attribute access
+                else getattr(credentials, cred_attr)  # Use getattr for direct attribute access
             )
             setattr(self, db_var, value)
 
@@ -342,7 +344,7 @@ class BaseDbEnv(Environment):
                 from the `credentials_type`.
         """
         return [
-            name for name in self._credentials_type.model_fields
+            name for name, _ in self._credentials_type.__class__.model_fields.items()
         ]
 
     def _get_db_var(self, cred_attr: str) -> str:

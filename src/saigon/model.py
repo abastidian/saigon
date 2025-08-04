@@ -51,8 +51,8 @@ class QueryDataPaginationToken(BaseModelNoExtra):
     Attributes:
         query_id (str): An identifier for the specific query. It must allow to retrieve the
             originating paginated query (e.g, an encoded set of params).
-        next_token (str | int): The token indicating the starting point for the next page of results.
-            This is typically an offset integer.
+        next_token (str | int): The token indicating the starting point for the next
+            page of results. This is typically an offset integer.
     """
 
     query_id: str
@@ -149,7 +149,8 @@ class QueryDataParams[QuerySelection: BaseModel](BaseModelNoExtra):
 
     def has_query_selection(self) -> bool:
         """
-        Checks if the query parameter represents a query selection model (and not a pagination token).
+        Checks if the query parameter represents a query selection model (and not a
+        pagination token).
 
         Returns:
             bool: True if `query` is present and not a pagination token, False otherwise.
@@ -296,7 +297,8 @@ class Range[RangeType: object](BaseModelNoExtra):
     @model_validator(mode='after')
     def validate(self) -> Self:
         """
-        Pydantic model validator to ensure that the start value is not greater than the end value.
+        Pydantic model validator to ensure that the start value is not greater than
+        the end value.
 
         Raises:
             ValueError: If `start` is greater than `end`.
@@ -371,8 +373,8 @@ class IntRange(Range[int]):
         start (int): The start integer of the range. Defaults to 2^63 - 1.
         end (int): The end integer of the range. Defaults to -(2^63).
     """
-    start: Annotated[int, 2**63 - 1]
-    end: Annotated[int, -(2**63)]
+    start: Annotated[int, 2 ** 63 - 1]
+    end: Annotated[int, -(2 ** 63)]
 
 
 class UIntRange(Range[int]):
@@ -384,7 +386,7 @@ class UIntRange(Range[int]):
         start (int): The start integer of the range. Defaults to 2^64 - 1.
         end (int): The end integer of the range. Defaults to 0.
     """
-    start: Annotated[int, 2**64 - 1]
+    start: Annotated[int, 2 ** 64 - 1]
     end: Annotated[int, 0]
 
 
@@ -406,6 +408,7 @@ class EmptyContent(BaseModel):
     A Pydantic model designed to handle empty or null content gracefully.
     It transforms `None` input into an empty dictionary.
     """
+
     @model_validator(mode='before')
     @classmethod
     def _check_for_null(cls, data: Any) -> Any:

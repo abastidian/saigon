@@ -99,6 +99,18 @@ In order to use context logging in your async functions use the ``asynclogcontex
 which provides the same construct as ``logcontext`` but for ``async`` functions.
 
 """
+import logging
+from contextvars import ContextVar
+from contextlib import (
+    AbstractContextManager,
+    ContextDecorator,
+    AbstractAsyncContextManager,
+    AsyncContextDecorator
+)
+from typing import Optional, Self
+
+import pythonjsonlogger.json as json_logger
+from pythonjsonlogger.core import RESERVED_ATTRS
 
 __all__ = [
     'logcontext',
@@ -108,18 +120,6 @@ __all__ = [
     'unset_log_context'
 ]
 
-import logging
-from typing import Optional, Self
-from contextvars import ContextVar
-from contextlib import (
-    AbstractContextManager,
-    ContextDecorator,
-    AbstractAsyncContextManager,
-    AsyncContextDecorator
-)
-
-import pythonjsonlogger.json as json_logger
-from pythonjsonlogger.core import RESERVED_ATTRS
 
 _LOG_CONTEXT = ContextVar('log-context', default={})
 _LOG_CONTEXT_MGR = ContextVar('log-context-mgr')
@@ -231,6 +231,9 @@ class logcontext(AbstractContextManager, ContextDecorator):
         _LOG_CONTEXT.reset(self._previous_ctx_token)
         _LOG_CONTEXT_MGR.reset(self._previous_mgr_token)
 
+    def items(self) -> dict:
+        return self._log_context.copy()
+
     def set(self, **kwargs):
         """
         Sets in the log context the specified key items as keywords::
@@ -286,6 +289,9 @@ class asynclogcontext(AbstractAsyncContextManager, AsyncContextDecorator):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self._mgr.__exit__(exc_type, exc_val, exc_tb)
+
+    def items(self) -> dict:
+        return self._mgr.items()
 
     def set(self, **kwargs):
         self._mgr.set(**kwargs)

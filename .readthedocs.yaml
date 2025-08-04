@@ -22,7 +22,7 @@ python:
     - method: pip
       path: .
       extra_requirements:
-        - all
+        - backend
+        - aws
         - docs
-
-#sphinx-apidoc -o . ../src
+        - extras

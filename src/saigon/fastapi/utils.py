@@ -1,37 +1,44 @@
 import logging
 from datetime import datetime
 from contextvars import ContextVar
-from typing import Annotated, Optional, Self
+from typing import Annotated, Optional, Type
 
 from pydantic import ConfigDict, Field, ValidationError
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import (
-    FastAPI, Query, Header, BackgroundTasks, Depends, status, Request, APIRouter
+    FastAPI,
+    Query,
+    Header,
+    BackgroundTasks,
+    Depends,
+    status,
+    Request,
+    APIRouter,
+    params
 )
 from fastapi.routing import APIRoute
 from fastapi.responses import JSONResponse
 
-from ..model import QueryDataParams, QueryDataPaginationToken
+from ..model import QueryDataParams, QueryDataPaginationToken, BaseModelNoExtra
 from ..logutils import asynclogcontext
 from ..model import TimeRange
-
 from .headers import *
 from .handlers import EmptyResponseBody
 
 __all__ = [
     'use_route_names_as_operation_ids',
     'LogMiddleware',
-    'AppContext',
-    'AppContextDependency',
-    'app_context',
+    'RouteContext',
+    'DefaultRouteContextDependency',
+    'route_context',
     'validate_query_pagination_params',
     'validate_query_date_range',
     'validation_error_exception_handler',
     'create_app'
 ]
 
-_APP_CONTEXT = ContextVar('_APP_CONTEXT')
+_ROUTE_CONTEXT = ContextVar('_ROUTE_CONTEXT')
 
 
 def use_route_names_as_operation_ids(app: FastAPI) -> None:
@@ -41,7 +48,8 @@ def use_route_names_as_operation_ids(app: FastAPI) -> None:
     and, for `APIRoute` instances, sets their `operation_id` to their `name`.
     This helps in generating API clients with simpler and more readable function names.
 
-    This function should be called only after all desired routes have been added to the FastAPI application.
+    This function should be called only after all desired routes have been added to the
+    FastAPI application.
 
     Args:
         app (FastAPI): The FastAPI application instance.
@@ -87,7 +95,8 @@ def validate_query_date_range(
         start_time: Annotated[datetime, Query(alias='StartTime')] = None,
         end_time: Annotated[datetime, Query(alias='EndTime')] = None
 ) -> TimeRange | None:
-    """Validates and constructs a `TimeRange` object from 'StartTime' and 'EndTime' query parameters.
+    """Validates and constructs a `TimeRange` object from 'StartTime' and 'EndTime' query
+    parameters.
 
     If both `start_time` and `end_time` are None, it returns None.
     If only `start_time` is provided, `end_time` defaults to the current UTC datetime.
@@ -157,7 +166,7 @@ def validation_error_exception_handler(
         )
 
 
-class LogMiddleware(BaseHTTPMiddleware):
+class LogMiddleware[ContextType: HeaderContext](BaseHTTPMiddleware):
     """
     Middleware for FastAPI applications that enhances logging and request context.
 
@@ -176,7 +185,12 @@ class LogMiddleware(BaseHTTPMiddleware):
         app.add_middleware(LogMiddleware, logger=my_logger)
     """
 
-    def __init__(self, app: FastAPI, logger: logging.Logger):
+    def __init__(
+            self,
+            app: FastAPI,
+            logger: logging.Logger,
+            context_type: Type[ContextType] = HeaderContext
+    ):
         """Initializes the LogMiddleware.
 
         Args:
@@ -186,6 +200,8 @@ class LogMiddleware(BaseHTTPMiddleware):
         """
         super().__init__(app)
         self._logger = logger
+        self._identity_id_header = context_type.model_fields['identity_id'].alias
+        self._request_id_header = context_type.model_fields['request_id'].alias
 
     async def dispatch(self, request: Request, call_next):
         """
@@ -204,10 +220,10 @@ class LogMiddleware(BaseHTTPMiddleware):
             Response: The Starlette response object.
         """
         async with asynclogcontext() as alc:
-            if request_id := request.headers.get(AWS_API_REQUEST_ID_HEADER_NAME, None):
+            if request_id := request.headers.get(self._request_id_header):
                 alc.set(request_id=request_id)
-            if identity_id := request.headers.get(AWS_COGNITO_IAM_AUTH_PROVIDER_HEADER_NAME):
-                alc.set(caller_id=identity_id)
+            if identity_id := request.headers.get(self._identity_id_header):
+                alc.set(identity_id=identity_id)
 
             self._logger.info(
                 'Received request',
@@ -227,7 +243,7 @@ class LogMiddleware(BaseHTTPMiddleware):
             return response
 
 
-class AppContext(RequestContext):
+class RouteContext[ContextType: HeaderContext](BaseModelNoExtra):
     """
     Represents the application context for a given request.
 
@@ -242,6 +258,7 @@ class AppContext(RequestContext):
     """
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    header_context: ContextType
     background_tasks: Optional[BackgroundTasks] = Field(None, exclude=True)
 
     def __init__(self, **kwargs):
@@ -253,37 +270,55 @@ class AppContext(RequestContext):
         """
         super().__init__(**kwargs)
 
+    @property
+    def headers(self) -> dict:
+        return self.header_context.headers
+
+    @property
+    def identity_id[IdentityId](self):
+        return self.header_context.identity_id
+
+    @property
+    def request_id(self) -> str:
+        return self.header_context.request_id
+
     @classmethod
-    async def from_route(
+    def create_dependency[ContextType: HeaderContext](
             cls,
-            background_tasks: BackgroundTasks,
-            request_context: Annotated[RequestContext, Header()]
-    ) -> Self:
-        """Dependency function to create and set the `AppContext` for a given request.
+            context_type: Optional[Type[ContextType]] = HeaderContext
+    ) -> params.Depends:
+        async def dependency(
+                background_tasks: BackgroundTasks,
+                header_context: Annotated[context_type, Header()]
+        ) -> context_type:
+            """
+            Dependency function to create and set the `AppContext` for a given request.
 
-        This class method is intended to be used with FastAPI's `Depends` system.
-        It constructs an `AppContext` instance from injected `BackgroundTasks`
-        and `RequestContext` (parsed from headers), and then sets this context
-        in a `ContextVar` to make it globally accessible during the request lifetime.
+            This class method is intended to be used with FastAPI's `Depends` system.
+            It constructs an `AppContext` instance from injected `BackgroundTasks`
+            and `RequestContext` (parsed from headers), and then sets this context
+            in a `ContextVar` to make it globally accessible during the request lifetime.
 
-        Args:
-            background_tasks (BackgroundTasks): FastAPI's injected `BackgroundTasks` object.
-            request_context (Annotated[RequestContext, Header()]): The request context
-                parsed directly from HTTP headers by FastAPI.
+            Args:
+                background_tasks (BackgroundTasks): FastAPI's injected `BackgroundTasks` object.
+                header_context (Annotated[HeaderContext, Header()]): The header context
+                    parsed directly from HTTP headers by FastAPI.
 
-        Returns:
-            Self: The newly created and set `AppContext` instance.
-        """
-        _APP_CONTEXT.set(
-            context := AppContext(
-                background_tasks=background_tasks,
-                **request_context.model_dump(by_alias=False)
+            Returns:
+                Self: The newly created and set `AppContext` instance.
+            """
+            _ROUTE_CONTEXT.set(
+                context := RouteContext(
+                    background_tasks=background_tasks,
+                    header_context=header_context
+                )
             )
-        )
-        return context
+            return context
+
+        return Depends(dependency)
 
 
-AppContextDependency = Depends(AppContext.from_route)
+DefaultRouteContextDependency = RouteContext.create_dependency()
 """A FastAPI dependency that injects and sets the `AppContext` for a request.
 
 This dependency should be added to FastAPI route functions or `APIRouter`s
@@ -291,7 +326,7 @@ to ensure `AppContext` is available and configured for the request.
 """
 
 
-def app_context() -> AppContext:
+def route_context[Context: HeaderContext]() -> RouteContext[Context]:
     """Retrieves the current application context from the ContextVar.
 
     This function provides a way to access the `AppContext` instance
@@ -300,14 +335,15 @@ def app_context() -> AppContext:
     Returns:
         AppContext: The `AppContext` instance for the current request.
     """
-    return _APP_CONTEXT.get()
+    return _ROUTE_CONTEXT.get()
 
 
-def create_app(
+def create_app[Context: HeaderContext](
         api_router: APIRouter,
         logger: logging.Logger,
         root_path: Optional[str] = '/v1',
         health_path: Optional[str | None] = '/',
+        context_type: Optional[Type[Context]] = HeaderContext,
         **kwargs
 ) -> FastAPI:
     """Factory function to create and configure a FastAPI application.
@@ -323,6 +359,8 @@ def create_app(
         root_path (Optional[str]): The root path for the application. Defaults to '/v1'.
         health_path (Optional[str | None]): The path for the health check endpoint.
             If set to None, no health endpoint is added. Defaults to '/'.
+        context_type (Optional[Type[HeaderContext]]): Custom RequestContext to install
+            as a dependency for the RouteContext
         **kwargs: Additional keyword arguments to pass directly to the FastAPI constructor.
 
     Returns:
@@ -333,7 +371,9 @@ def create_app(
     )
     app.add_middleware(LogMiddleware, logger=logger)
     app.add_exception_handler(ValidationError, validation_error_exception_handler)
-    app.include_router(api_router, dependencies=[AppContextDependency])
+    app.include_router(
+        api_router, dependencies=[RouteContext.create_dependency(context_type)]
+    )
     if health_path:
         app.add_api_route(health_path, lambda: EmptyResponseBody())
 
