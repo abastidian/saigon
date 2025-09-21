@@ -195,7 +195,10 @@ class DbConnector:
         except sqlalchemy.exc.SQLAlchemyError as err:
             raise DbExecutionError(str(err)) from err
 
-    def reflect(self, retries: int) -> sqlalchemy.MetaData:
+    def reflect(
+            self, retries: int,
+            schema: Optional[str | None] = None
+    ) -> sqlalchemy.MetaData:
         """
         Reflects all database objects (tables, etc.) into a SQLAlchemy MetaData object.
 
@@ -206,6 +209,7 @@ class DbConnector:
         Args:
             retries (int): The number of retries before raising an exception.
                 Each retry uses an exponential back-off.
+            schema (Optional[str]): Optional target schema. Defaults to `None`.
 
         Returns:
             sqlalchemy.MetaData: A `MetaData` object containing the reflected
@@ -214,7 +218,7 @@ class DbConnector:
         Raises:
             DbExecutionError: If reflection fails after all retries.
         """
-        meta = sqlalchemy.MetaData()
+        meta = sqlalchemy.MetaData(schema=schema)
         for attempt in range(retries):
             try:
                 meta.reflect(bind=self.engine)
@@ -243,7 +247,8 @@ class AbstractDbManager(abc.ABC):
     def __init__(
             self,
             db_connector: DbConnector,
-            retries: Optional[int] = CONNECTION_MAX_RETRIES_DEFAULT
+            retries: Optional[int] = CONNECTION_MAX_RETRIES_DEFAULT,
+            schema: Optional[str | None] = None
     ) -> None:
         """Initializes the AbstractDbManager.
 
@@ -254,9 +259,10 @@ class AbstractDbManager(abc.ABC):
                 database interactions.
             retries (Optional[int]): The number of retries for database reflection
                 at startup. Defaults to `CONNECTION_MAX_RETRIES_DEFAULT`.
+            schema (Optional[str]): Optional target schema. Defaults to `None`.
         """
         self.db_connector = db_connector
-        self.__reflect(retries)
+        self.__reflect(retries, schema)
 
     @classmethod
     def meta(cls) -> sqlalchemy.MetaData:
@@ -479,7 +485,9 @@ class AbstractDbManager(abc.ABC):
         """
         self.db_connector.execute(delete_statement)
 
-    def __reflect(self, retries: int) -> sqlalchemy.MetaData:
+    def __reflect(
+            self, retries: int, schema: str | None
+    ) -> sqlalchemy.MetaData:
         """
         Internal method to perform database reflection.
 
@@ -489,6 +497,7 @@ class AbstractDbManager(abc.ABC):
 
         Args:
             retries (int): The number of retries for reflection.
+            schema str: target schema
 
         Returns:
             sqlalchemy.MetaData: The reflected database metadata.
@@ -498,7 +507,7 @@ class AbstractDbManager(abc.ABC):
         # to restart the service in order to have it consume table changes, but it
         # is something we need to keep in mind.
         if self.__class__.__meta is None:
-            self.__class__.__meta = self.db_connector.reflect(retries)
+            self.__class__.__meta = self.db_connector.reflect(retries, schema)
 
         return self.__class__.__meta
 

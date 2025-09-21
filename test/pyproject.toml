@@ -2,11 +2,13 @@
 requires = ["hatchling", "hatch-dependency-coversion"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build]
-directory = "../dist"
-
 [tool.hatch.version]
 path = "../src/saigon/__init__.py"
+
+# Indicates to match the same version. This eliminates the
+# need to explicitly set the version to this project's version
+[tool.hatch.metadata.hooks.dependency-coversion]
+override-versions-of = ["saigon-py"]
 
 [project]
 name = "saigon-py-test"
@@ -17,7 +19,7 @@ authors = [
 description = "Common components to build digital backends"
 requires-python = ">=3.13"
 dependencies = [
-    "saigon-py[backend,aws,dev]",
+    "saigon-py[backend,aws,extras,dev]",
     "psycopg~=3.2.9"
 ]
 classifiers = [
@@ -27,20 +29,9 @@ classifiers = [
 [project.urls]
 "Source Code" = "https://github.com/abastidian/saigon"
 
-# Indicates to match the same version. This eliminates the
-# need to explicitly set the version to this project's version
-[tool.hatch.metadata.hooks.dependency-coversion]
-override-versions-of = ["saigon-py"]
-
-[tool.hatch.build.targets.sdist]
-include = ["saigon_test"]
-
+# Indicate no package generation
 [tool.hatch.build.targets.wheel]
-packages = ["saigon_test"]
-
-[project.scripts]
-saigon-lint = "saigon_test.lint:run_flake8"
-cognito-cli = "saigon_test.cli.cognito:main"
+bypass-selection = true
 
 [tool.hatch.envs.default]
 detached=true

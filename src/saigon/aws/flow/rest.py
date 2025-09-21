@@ -6,7 +6,7 @@ from typing import List, Callable, Generator
 from pydantic import BaseModel
 
 from ...model import QueryDataParams, QueryDataResult
-from ...utils import EventHandler
+from ...interface import EventHandler
 
 
 __all__ = [

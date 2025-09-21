@@ -157,6 +157,9 @@ class BaseDbEnv(Environment):
        fetch through the specified concrete `SecretVault`
      - environment variables (prefixed by `var_prefix` + `_DB_`)
 
+    It also defines variables for the following parameters:
+        = {var_prefix}_DB_SCHEMA: database target schema. Defaults None.
+
     Examples:
          Scenario 1: Loading from a JSON variable::
             # Assume an environment variable MYAPP_DATABASE_CREDENTIALS is defined with
@@ -233,6 +236,11 @@ class BaseDbEnv(Environment):
         self._var_prefix = var_prefix
         self._secret_vault = secret_vault
         self._credentials_type: Type[DbCredentials] = credentials_type
+        # Additional config vars
+        db_schema_var = self._get_db_var('schema')
+        setattr(
+            self, db_schema_var, os.getenv(db_schema_var)
+        )
 
         # Check if credentials are provided directly through variable
         credentials_var = f"{var_prefix}_DATABASE_CREDENTIALS"
@@ -249,6 +257,10 @@ class BaseDbEnv(Environment):
 
         # Set the loaded credentials as attributes on self with the correct prefixed names
         self._set_db_vars_from_credentials(db_credentials)
+
+    @property
+    def db_schema(self) -> Optional[str]:
+        return self.__getattr__(self._get_db_var('schema'))
 
     @property
     def db_credentials(self) -> DbCredentials:

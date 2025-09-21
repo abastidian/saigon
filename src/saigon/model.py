@@ -31,7 +31,12 @@ class BaseModelNoExtra(BaseModel):
     not explicitly defined in the model will raise a validation error.
     It also sets `use_enum_values` to True for convenience.
     """
-    model_config = ConfigDict(extra='forbid', use_enum_values=True)
+    model_config = ConfigDict(
+        extra='forbid',
+        validate_by_name=True,
+        validate_by_alias=True,
+        use_enum_values=True
+    )
 
 
 class DataSet[ModelType: BaseModel](BaseModel):

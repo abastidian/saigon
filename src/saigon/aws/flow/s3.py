@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import boto3
 from mypy_boto3_s3.client import S3Client
 
-from ...utils import EventHandler
+from ...interface import EventHandler
 
 __all__ = [
     'S3WriterHandler',

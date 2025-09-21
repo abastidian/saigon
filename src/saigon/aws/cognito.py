@@ -1,7 +1,7 @@
 import uuid
-from typing import Tuple, Optional, Dict, List
 from functools import cached_property
 from types import MappingProxyType
+from typing import Tuple, Optional, Dict, List
 
 import boto3
 from mypy_boto3_cognito_identity.type_defs import CredentialsTypeDef
