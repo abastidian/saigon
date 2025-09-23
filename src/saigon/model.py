@@ -230,9 +230,7 @@ class QueryDataParams[QuerySelection: BaseModel](BaseModelNoExtra):
                 )
             )
             if camel_case:
-                params_dict.update(
-                    self.camelcase_keys(params_dict)
-                )
+                params_dict = self.camelcase_keys(params_dict)
 
         return params_dict
 

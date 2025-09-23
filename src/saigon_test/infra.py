@@ -58,6 +58,7 @@ def include_all(exports: Optional[List[str]] = None) -> List[str]:
 
 class ExecutionEnvironment(StrEnum):
     LOCAL = auto()
+    DEV = auto()
     SBX = auto()
     PROD = auto()
 

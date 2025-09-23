@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from functools import cached_property
 from typing import Optional, Type, Callable, Dict, Union, override
 
@@ -14,7 +15,8 @@ from ..interface import RequestAuthorizer
 
 __all__ = [
     'RestClient',
-    'BackendRestClient'
+    'BackendRestClient',
+    'upload_file_to_url'
 ]
 
 
@@ -37,8 +39,7 @@ class RestClient:
             service_url: str,
             service_port: int | None = None,
             api_prefix: Optional[str] = '',
-            authorizer=NoAuthRequestAuthorizer(),
-            **kwargs
+            authorizer=NoAuthRequestAuthorizer()
     ):
         """Initializes the RestClientBase.
 
@@ -47,7 +48,6 @@ class RestClient:
             service_port (Optional[int]): The port number of the service. Defaults to None.
             api_prefix (Optional[str]): A prefix to add to all API endpoints (e.g., "/v1").
                 Defaults to an empty string.
-            **kwargs: Additional keyword arguments.
         """
         self._service_url = service_url
         self._service_port = service_port
@@ -318,7 +318,7 @@ class RestClient:
             **dict(
                 headers=dict(authorized_request.headers),
                 params=authorized_request.params,
-                json=authorized_request.data
+                json=authorized_request.data if authorized_request.data else None
             )
         )
         response.raise_for_status()
@@ -349,3 +349,29 @@ class BackendRestClient(RestClient):
         super().__init__(
             f"http://{alb_dns}", service_port, f"/{api_version}"
         )
+
+
+def upload_file_to_url(
+        filepath: Path,
+        target_url: str,
+        headers: Dict | None = None
+):
+    """Uploads a file to an provided URL using a PUT.
+
+    Args:
+        filepath (pathlib.Path): The path to the file to be uploaded.
+        target_url (str): The target url where to PUT the request
+        headers (Dict | None): Optional headers
+
+    Raises:
+        requests.exceptions.RequestException: If the HTTP PUT request to the
+            pre-signed URL fails (non-2xx status code).
+    """
+    with open(filepath, "rb") as object_file:
+        file_content = object_file.read()
+        response = requests.put(
+            target_url,
+            data=file_content,
+            headers=headers
+        )
+        response.raise_for_status()

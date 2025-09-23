@@ -235,11 +235,6 @@ class LogMiddleware[ContextType: HeaderContext](BaseHTTPMiddleware):
 
             response = await call_next(request)
 
-            self._logger.info(
-                'Return response',
-                extra=dict(status_code=response.status_code)
-            )
-
             return response
 
 

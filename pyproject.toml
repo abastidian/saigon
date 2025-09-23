@@ -87,8 +87,7 @@ path = ".venv"
 lint = "saigon-lint"
 docs = "cd test && python -m sphinx -T -b html -d _build/doctrees -D language=en . html"
 package = [
-    "hatch build",
-    "cd test && hatch build"
+    "hatch build"
 ]
 publish = [
     "twine upload --repository pypi dist/saigon_py-`hatch version`*"
