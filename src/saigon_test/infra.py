@@ -3,6 +3,8 @@ import uuid
 import enum
 import time
 import pytest
+import json
+import os
 from pathlib import Path
 from enum import StrEnum, auto
 from datetime import datetime
@@ -36,6 +38,7 @@ __all__ = [
     'mark_only_envs',
     'pytest_collection_modifyitems',
     'load_execution_env_vars',
+    'load_jsonenv',
     'make_test_model_data',
     'wait_for_condition',
     'GeneratorReturnValue'
@@ -96,18 +99,40 @@ def pytest_collection_modifyitems(
             )
 
 
+def load_jsonenv(envfile: str | Path) -> bool:
+    if isinstance(envfile, str):
+        envfile = Path(envfile)
+
+    if not envfile.exists():
+        return False
+
+    found_var = False
+    with Path(envfile).open() as file:
+        environment: dict = json.load(file)
+        found_var = len(environment) > 0
+        for key, value in environment.items():
+            if os.environ.get(key) is None:
+                os.environ[key] = value
+
+    return found_var
+
+
 def load_execution_env_vars(
         env_type: ExecutionEnvironment,
         parent_dir=Path('.')
 ):
-    env_file_name = f"env.{env_type.value}"
-    # find a location with env files
-    env_file_path = Path(parent_dir, env_file_name)
-    if not env_file_path.exists():
-        env_file_path = Path(get_file_dir(__file__), env_file_name)
+    # find a location with env files, either env or json format
+    for extension in ["", ".json"]:
+        env_file_name = f"env.{env_type.value}{extension}"
+        if not (env_file_path := Path(parent_dir, env_file_name)).exists():
+            env_file_path = Path(get_file_dir(__file__), env_file_name)
+            if not env_file_path.exists():
+                ValueError(f'could not find configuration file for environment={env_type}')
 
-    if not load_dotenv(env_file_path):
-        raise ValueError('could not load environment file')
+        if extension == ".json":
+            load_jsonenv(env_file_path)
+        else:
+            load_dotenv(env_file_path)
 
 
 def wait_for_condition[ResultType](

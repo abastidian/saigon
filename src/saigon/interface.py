@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from contextlib import contextmanager
-from typing import Protocol, Type, runtime_checkable, Generator
+from typing import Protocol, Type, runtime_checkable, Generator, ClassVar, Optional
 
 from pydantic import BaseModel
 
@@ -9,7 +9,8 @@ from requests import Request
 __all__ = [
     'EventHandler',
     'SecretVault',
-    'RequestAuthorizer'
+    'RequestAuthorizer',
+    'KeyValueRepository'
 ]
 
 
@@ -98,4 +99,20 @@ class SecretVault(Protocol):
 class RequestAuthorizer(Protocol):
     @abstractmethod
     def authorize(self, request: Request) -> Request:
+        ...
+
+
+class KeyValueRepository(Protocol):
+    ValueType: ClassVar = int | str | float | bool
+
+    @abstractmethod
+    def get_by_name[V: KeyValueRepository.ValueType](
+            self, key_type: V, key: str
+    ) -> Optional[V]:
+        ...
+
+    @abstractmethod
+    def set_by_name[V: KeyValueRepository.ValueType](
+            self, key: str, value: V
+    ) -> Optional[V]:
         ...

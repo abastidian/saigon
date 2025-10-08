@@ -53,11 +53,17 @@ def filter_unknown_model_fields(
         print(filtered_data)
         # Expected output: {'id': 1, 'name': 'Alice', 'email': 'alice@example.com'}
     """
-    return {
-        name: value
-        for name, value in model_data.items()
-        if name in model_type.model_fields and value is not None
-    }
+    data_params = {}
+    for name, field in model_type.model_fields.items():
+        column_name = (
+            name if name in model_data
+            else field.alias if field.alias in model_data
+            else None
+        )
+        if column_name:
+            data_params[name] = model_data[column_name]
+
+    return data_params
 
 
 def model_data_to_row_values(

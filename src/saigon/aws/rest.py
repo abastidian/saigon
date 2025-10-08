@@ -103,7 +103,7 @@ class SIGv4RequestAuthorizer(RequestAuthorizer):
             raise KeyError(f"Invalid username={username}")
 
         self._current_user = username
-        return credentials['user_id']
+        return credentials.user_id
 
     @override
     def authorize(self, request: Request) -> Request:

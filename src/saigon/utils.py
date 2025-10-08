@@ -10,13 +10,18 @@ from typing import (
     List,
     Callable,
     Any,
+    ClassVar,
+    override
 )
 
 from pydantic import BaseModel, field_serializer, ConfigDict
 
+from .interface import KeyValueRepository
+
 __all__ = [
     'get_file_dir',
     'NameValueItem',
+    'EnvironmentRepository',
     'Environment',
     'NodeEntityType',
     'NodeEntity'
@@ -36,6 +41,25 @@ class NameValueItem[ValueType](NamedTuple):
     """
     name: str
     value: ValueType
+
+
+class EnvironmentRepository(KeyValueRepository):
+    _VALUE_PARSERS: ClassVar = {
+        bool: lambda val: val.lower() == 'true' if val else True
+    }
+
+    @override
+    def get_by_name(
+            self, key_type: KeyValueRepository.ValueType, key: str
+    ) -> Optional[KeyValueRepository.ValueType]:
+        value_parser = self._VALUE_PARSERS.get(key_type, key)
+        return value_parser(os.getenv(key))
+
+    @override
+    def set_by_name[V: KeyValueRepository](
+            self, key: str, value: V
+    ) -> Optional[V]:
+        os.environ[key] = str(value)
 
 
 class Environment(abc.ABC, BaseModel):
