@@ -16,6 +16,7 @@ __all__ = [
     'QueryDataResult',
     'Range',
     'TimeRange',
+    'BasicRestResponse',
     'EmptyContent',
     'ModelTypeDef',
 ]
@@ -404,6 +405,11 @@ class FloatRange(Range[float]):
     """
     start: Annotated[float, float('-inf')]
     end: Annotated[float, float('inf')]
+
+
+class BasicRestResponse(BaseModel):
+    status_code: int
+    content: Optional[str] = None
 
 
 class EmptyContent(BaseModel):

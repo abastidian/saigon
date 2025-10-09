@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 from requests import Request
 
-from ..model import EmptyContent
+from ..model import EmptyContent, BasicRestResponse
 from ..interface import RequestAuthorizer
 
 
@@ -322,9 +322,16 @@ class RestClient:
             )
         )
         response.raise_for_status()
+
+        if response_type is None:
+            return EmptyContent()
+
         return (
-            response_type.model_validate_json(response.content)
-            if response_type else EmptyContent()
+            BasicRestResponse(
+                status_code=response.status_code,
+                content=response.content
+            ) if issubclass(response_type, BasicRestResponse)
+            else response_type.model_validate_json(response.content)
         )
 
 
