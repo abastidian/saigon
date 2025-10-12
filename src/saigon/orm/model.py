@@ -1,5 +1,6 @@
 from typing import Type, Mapping, TypeVar, Dict, Set, Any
 
+from pydantic_core import to_jsonable_python
 from pydantic import BaseModel
 
 import sqlalchemy
@@ -137,7 +138,10 @@ def model_data_to_row_values(
         {
             name: (
                 value if (
-                    isinstance(value, Dict) or isinstance(value, bool) or isinstance(value, list)
+                    value is None
+                    or isinstance(value, Dict)
+                    or isinstance(value, bool)
+                    or isinstance(value, list)
                 )
                 else str(value)
             )

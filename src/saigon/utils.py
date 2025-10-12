@@ -20,6 +20,7 @@ from .interface import KeyValueRepository
 
 __all__ = [
     'get_file_dir',
+    'parse_comma_separated_list',
     'NameValueItem',
     'EnvironmentRepository',
     'Environment',
@@ -30,6 +31,13 @@ __all__ = [
 
 def get_file_dir(filename: str) -> Path:
     return Path(os.path.dirname(filename)).resolve()
+
+
+def parse_comma_separated_list(formatted: str) -> List[str]:
+    return (
+        [item.strip(' ') for item in formatted.split(',')]
+        if formatted.strip() != '' else []
+    )
 
 
 class NameValueItem[ValueType](NamedTuple):
@@ -45,21 +53,27 @@ class NameValueItem[ValueType](NamedTuple):
 
 class EnvironmentRepository(KeyValueRepository):
     _VALUE_PARSERS: ClassVar = {
-        bool: lambda val: val.lower() == 'true' if val else True
+        bool: lambda val: val.lower() == 'true' if val else True,
+        List: lambda val: parse_comma_separated_list(val),
+        list: lambda val: parse_comma_separated_list(val)
     }
 
     @override
     def get_by_name(
             self, key_type: KeyValueRepository.ValueType, key: str
     ) -> Optional[KeyValueRepository.ValueType]:
-        value_parser = self._VALUE_PARSERS.get(key_type, key)
-        return value_parser(os.getenv(key))
+        value_parser = self._VALUE_PARSERS.get(key_type, key_type)
+        formatted_value = os.getenv(key)
+        return value_parser(formatted_value) if formatted_value else None
 
     @override
     def set_by_name[V: KeyValueRepository](
             self, key: str, value: V
     ) -> Optional[V]:
-        os.environ[key] = str(value)
+        if value:
+            os.environ[key] = str(value)
+        else:
+            os.unsetenv(key)
 
 
 class Environment(abc.ABC, BaseModel):

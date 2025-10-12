@@ -4,10 +4,10 @@ from functools import cached_property
 from typing import Optional, Type, Callable, Dict, Union, override
 
 import requests
+import httpx
 
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
-from requests import Request
 
 from ..model import EmptyContent, BasicRestResponse
 from ..interface import RequestAuthorizer
@@ -15,6 +15,7 @@ from ..interface import RequestAuthorizer
 
 __all__ = [
     'RestClient',
+    'AsyncRestClient',
     'BackendRestClient',
     'upload_file_to_url'
 ]
@@ -22,17 +23,12 @@ __all__ = [
 
 class NoAuthRequestAuthorizer(RequestAuthorizer):
     @override
-    def authorize(self, request: Request) -> Request:
+    def authorize(self, request: requests.Request) -> requests.Request:
         return request
 
 
-class RestClient:
-    """Base class for REST API clients.
-
-    Provides common functionalities for making HTTP requests,
-    waiting for conditions, and handling S3 pre-signed URL uploads.
-    It can be extended for specific backend services and authentication mechanisms.
-    """
+class _RestClientBase:
+    """Base class for REST API clients implementations."""
 
     def __init__(
             self,
@@ -41,45 +37,10 @@ class RestClient:
             api_prefix: Optional[str] = '',
             authorizer=NoAuthRequestAuthorizer()
     ):
-        """Initializes the RestClientBase.
-
-        Args:
-            service_url (str): The base URL of the service (e.g., "http://localhost").
-            service_port (Optional[int]): The port number of the service. Defaults to None.
-            api_prefix (Optional[str]): A prefix to add to all API endpoints (e.g., "/v1").
-                Defaults to an empty string.
-        """
         self._service_url = service_url
         self._service_port = service_port
         self._api_prefix = api_prefix
         self._authorizer = authorizer
-
-    @classmethod
-    def wait_for_condition(
-            cls, condition: Callable[..., bool], timeout_sec: int = 60
-    ):
-        """Waits for a given condition to become true within a specified timeout.
-
-        This method polls the `condition` callable at regular intervals (2 seconds)
-        until it returns True or the `timeout_sec` is reached.
-
-        Args:
-            condition (Callable[..., bool]): A callable that returns True when the
-                desired condition is met, and False otherwise.
-            timeout_sec (int): The maximum number of seconds to wait for the
-                condition. Defaults to 60.
-
-        Raises:
-            TimeoutError: If the condition is not met within the specified timeout.
-        """
-        polling_period_sec = 2
-        for i in range(0, int(timeout_sec / 2) + 1):
-            if condition():
-                return
-
-            time.sleep(polling_period_sec)
-
-        raise TimeoutError('condition not met in time')
 
     def _build_service_url(self, service_port: Optional[int] = None):
         """Constructs the full service URL based on base URL, optional port, and API prefix.
@@ -108,6 +69,328 @@ class RestClient:
             str: The default base URL.
         """
         return self._build_service_url()
+
+    def _build_request[RequestContentTypeDef: BaseModel](
+            self,
+            method: str,
+            endpoint: str,
+            params: Optional[dict] = None,
+            extra_headers: Optional[dict] = None,
+            content: Optional[RequestContentTypeDef] = None,
+            service_port: Optional[int] = None
+    ) -> requests.Request:
+        """Builds an `Request` object for a given HTTP request.
+
+        This private method handles constructing the URL, setting default headers
+        like 'Host', 'Accept', and 'Content-Type', and preparing the request body.
+        It then calls `_sign_request` to apply any necessary authentication.
+
+        Args:
+            method (str): The HTTP method (e.g., 'GET', 'POST').
+            endpoint (str): The API endpoint path.
+            params (Optional[dict]): A dictionary of URL query parameters. Defaults to None.
+            extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
+                Defaults to None.
+            content (Optional[RequestContentTypeDef]): The request body content as a model.
+                It will be JSON-encoded. Defaults to None.
+            service_port (Optional[int]): A specific port to use for this request.
+                Defaults to None.
+
+        Returns:
+            Request: The constructed and potentially signed Request object.
+        """
+        service_base_url = (
+            self._build_service_url(service_port) if service_port
+            else self._default_base_url
+        )
+        target_url = service_base_url + endpoint
+        headers = extra_headers.copy() if extra_headers else {}
+        headers.update(
+            {
+                "Host": target_url.split("//")[-1].split("/")[0],  # Extract host from URL
+            }
+        )
+        match (method.upper()):
+            case 'GET':
+                headers['Accept'] = 'application/json'
+            case _:
+                headers['Content-Type'] = 'application/json'
+
+        return self._authorizer.authorize(
+            requests.Request(
+                method=method,
+                url=target_url,
+                headers=headers,
+                data=to_jsonable_python(content) if content else None,
+                params=params
+            )
+        )
+
+    @classmethod
+    def _process_response[
+        ResponseContentTypeDef: BaseModel
+    ](
+            cls,
+            response: httpx.Response,
+            response_type: Optional[Type[ResponseContentTypeDef]] = None,
+    ):
+        response.raise_for_status()
+
+        if response_type is None:
+            return EmptyContent()
+
+        return (
+            BasicRestResponse(
+                status_code=response.status_code,
+                content=response.text
+            ) if issubclass(response_type, BasicRestResponse)
+            else response_type.model_validate_json(response.content)
+        )
+
+    @classmethod
+    def wait_for_condition(
+            cls, condition: Callable[..., bool], timeout_sec: int = 60
+    ):
+        """Waits for a given condition to become true within a specified timeout.
+
+        This method polls the `condition` callable at regular intervals (2 seconds)
+        until it returns True or the `timeout_sec` is reached.
+
+        Args:
+            condition (Callable[..., bool]): A callable that returns True when the
+                desired condition is met, and False otherwise.
+            timeout_sec (int): The maximum number of seconds to wait for the
+                condition. Defaults to 60.
+
+        Raises:
+            TimeoutError: If the condition is not met within the specified timeout.
+        """
+        polling_period_sec = 2
+        for i in range(0, int(timeout_sec / 2) + 1):
+            if condition():
+                return
+
+            time.sleep(polling_period_sec)
+
+        raise TimeoutError('condition not met in time')
+
+
+class AsyncRestClient(_RestClientBase):
+    """Async Rest Client.
+
+    Provides common functionalities for making HTTP requests,
+    waiting for conditions, and handling S3 pre-signed URL uploads.
+    It can be extended for specific backend services and authentication mechanisms.
+    """
+
+    def __init__(
+            self,
+            service_url: str,
+            service_port: int | None = None,
+            api_prefix: Optional[str] = '',
+            authorizer=NoAuthRequestAuthorizer()
+    ):
+        """Initializes the RestClientBase.
+
+        Args:
+            service_url (str): The base URL of the service (e.g., "http://localhost").
+            service_port (Optional[int]): The port number of the service. Defaults to None.
+            api_prefix (Optional[str]): A prefix to add to all API endpoints (e.g., "/v1").
+                Defaults to an empty string.
+        """
+        super().__init__(service_url, service_port, api_prefix, authorizer)
+        self._client = httpx.AsyncClient()
+
+    async def close(self):
+        if self._client is not None:
+            await self._client.aclose()
+
+    async def get_resource[ResponseContentTypeDef: BaseModel](
+            self,
+            response_type: Type[ResponseContentTypeDef],
+            endpoint: str,
+            query_params: Optional[dict] = None,
+            headers: Optional[dict] = None,
+            service_port: Optional[int] = None
+    ) -> ResponseContentTypeDef:
+        """Sends a GET request to retrieve a resource.
+
+        Args:
+            response_type (Type[ResponseContentTypeDef]): The Pydantic model type
+                to which the JSON response content should be deserialized.
+            endpoint (str): The API endpoint path (e.g., "/items/123").
+            query_params (Optional[dict]): An object containing query
+                parameters. Its `url_params_dict` will be used. Defaults to None.
+            headers (Optional[dict]): A dictionary of additional HTTP headers to send.
+                Defaults to None.
+            service_port (Optional[int]): A specific port to use for this request,
+                overriding the instance's default port. Defaults to None.
+
+        Returns:
+            ResponseContentTypeDef: An instance of the `response_type` Pydantic model
+                populated with the response data.
+        """
+        return await self.__send_request(
+            'GET',
+            endpoint,
+            extra_headers=headers,
+            response_type=response_type,
+            params=query_params,
+            service_port=service_port
+        )
+
+    async def create_resource[
+        RequestContentTypeDef: BaseModel,
+        ResponseContentTypeDef: BaseModel
+    ](
+        self,
+        response_type: Type[ResponseContentTypeDef],
+        endpoint: str,
+        query_params: Optional[dict] = None,
+        content: Optional[RequestContentTypeDef] = None,
+        headers: Optional[dict] = None,
+        service_port: Optional[int] = None
+    ) -> ResponseContentTypeDef:
+        """Sends a POST request to create a resource.
+
+        Args:
+            response_type (Type[ResponseContentTypeDef]): The Pydantic model type
+                to which the JSON response content should be deserialized.
+            endpoint (str): The API endpoint path (e.g., "/items").
+            query_params (Optional[Dict]): Mapping of URL query parameters
+            content (Optional[RequestContentTypeDef]): An instance of a Pydantic model
+                representing the request body. It will be serialized to JSON. Defaults to None.
+            headers (Optional[dict]): A dictionary of additional HTTP headers to send.
+                Defaults to None.
+            service_port (Optional[int]): A specific port to use for this request,
+                overriding the instance's default port. Defaults to None.
+
+        Returns:
+            ResponseContentTypeDef: An instance of the `response_type` Pydantic model
+                populated with the response data.
+        """
+        return await self.__send_request(
+            'POST',
+            endpoint,
+            params=query_params,
+            extra_headers=headers,
+            content=content,
+            response_type=response_type,
+            service_port=service_port
+        )
+
+    async def delete_resource(
+            self,
+            endpoint: str,
+            headers: Optional[dict] = None,
+            service_port: Optional[int] = None
+    ):
+        """Sends a DELETE request to remove a resource.
+
+        Args:
+            endpoint (str): The API endpoint path (e.g., "/items/123").
+            headers (Optional[dict]): A dictionary of additional HTTP headers to send.
+                Defaults to None.
+            service_port (Optional[int]): A specific port to use for this request,
+                overriding the instance's default port. Defaults to None.
+        """
+        await self.__send_request(
+            'DELETE',
+            endpoint,
+            extra_headers=headers,
+            service_port=service_port
+        )
+
+    async def __send_request[
+        RequestContentTypeDef: BaseModel,
+        ResponseContentTypeDef: BaseModel
+    ](
+            self,
+            method: str,
+            endpoint: str,
+            params: Optional[dict] = None,
+            extra_headers: Optional[dict] = None,
+            content: Optional[RequestContentTypeDef] = None,
+            response_type: Optional[Type[ResponseContentTypeDef]] = None,
+            service_port: Optional[int] = None
+    ) -> Union[ResponseContentTypeDef, EmptyContent]:
+        """Sends the actual HTTP request and processes the response.
+
+        This private method selects the appropriate `requests` method based on
+        the HTTP verb, builds the request, sends it, checks for HTTP errors,
+        and deserializes the response content into the specified Pydantic model.
+
+        Args:
+            method (str): The HTTP method (e.g., 'GET', 'POST').
+            endpoint (str): The API endpoint path.
+            params (Optional[dict]): A dictionary of URL query parameters. Defaults to None.
+            extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
+                Defaults to None.
+            content (Optional[RequestContentTypeDef]): The request body content.
+                Defaults to None.
+            response_type (Optional[Type[ResponseContentTypeDef]]): The Pydantic model type
+                for the response. If None, `EmptyContent` is returned.
+                Defaults to None.
+            service_port (Optional[int]): A specific port to use for this request.
+                Defaults to None.
+
+        Returns:
+            Union[ResponseContentTypeDef, EmptyContent]: An instance of the
+                `response_type` Pydantic model, or `EmptyContent` if no
+                `response_type` was provided.
+
+        Raises:
+            requests.exceptions.RequestException: If the HTTP request fails
+                (non-2xx status code).
+        """
+        method_impls: Dict[str, Callable] = {
+            'GET': self._client.get,
+            'POST': self._client.post,
+            'PUT': self._client.put,
+            'DELETE': self._client.delete
+        }
+        authorized_request = super()._build_request(
+            method, endpoint, params, extra_headers, content, service_port
+        )
+        response: httpx.Response = await method_impls[authorized_request.method](
+            url=authorized_request.url,
+            headers=authorized_request.headers,
+            params=authorized_request.params,
+            json=authorized_request.data if authorized_request.data else None
+        )
+
+        return super()._process_response(response, response_type)
+
+
+class RestClient(_RestClientBase):
+    """Async Rest Client.
+
+    Provides common functionalities for making HTTP requests,
+    waiting for conditions, and handling S3 pre-signed URL uploads.
+    It can be extended for specific backend services and authentication mechanisms.
+    """
+
+    def __init__(
+            self,
+            service_url: str,
+            service_port: int | None = None,
+            api_prefix: Optional[str] = '',
+            authorizer=NoAuthRequestAuthorizer()
+    ):
+        """Initializes the RestClientBase.
+
+        Args:
+            service_url (str): The base URL of the service (e.g., "http://localhost").
+            service_port (Optional[int]): The port number of the service. Defaults to None.
+            api_prefix (Optional[str]): A prefix to add to all API endpoints (e.g., "/v1").
+                Defaults to an empty string.
+        """
+        super().__init__(service_url, service_port, api_prefix, authorizer)
+        self._client = httpx.Client()
+
+    def close(self):
+        if self._client is not None:
+            self._client.close()
 
     def get_resource[ResponseContentTypeDef: BaseModel](
             self,
@@ -198,67 +481,11 @@ class RestClient:
             service_port (Optional[int]): A specific port to use for this request,
                 overriding the instance's default port. Defaults to None.
         """
-        return self.__send_request(
+        self.__send_request(
             'DELETE',
             endpoint,
             extra_headers=headers,
             service_port=service_port
-        )
-
-    def __build_request(
-            self,
-            method: str,
-            endpoint: str,
-            params: Optional[dict] = None,
-            extra_headers: Optional[dict] = None,
-            content: Optional[dict] = None,
-            service_port: Optional[int] = None
-    ) -> requests.Request:
-        """Builds an `Request` object for a given HTTP request.
-
-        This private method handles constructing the URL, setting default headers
-        like 'Host', 'Accept', and 'Content-Type', and preparing the request body.
-        It then calls `_sign_request` to apply any necessary authentication.
-
-        Args:
-            method (str): The HTTP method (e.g., 'GET', 'POST').
-            endpoint (str): The API endpoint path.
-            params (Optional[dict]): A dictionary of URL query parameters. Defaults to None.
-            extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
-                Defaults to None.
-            content (Optional[dict]): The request body content as a dictionary.
-                It will be JSON-encoded. Defaults to None.
-            service_port (Optional[int]): A specific port to use for this request.
-                Defaults to None.
-
-        Returns:
-            Request: The constructed and potentially signed Request object.
-        """
-        service_base_url = (
-            self._build_service_url(service_port) if service_port
-            else self._default_base_url
-        )
-        target_url = service_base_url + endpoint
-        headers = extra_headers.copy() if extra_headers else {}
-        headers.update(
-            {
-                "Host": target_url.split("//")[-1].split("/")[0],  # Extract host from URL
-            }
-        )
-        match (method.upper()):
-            case 'GET':
-                headers['Accept'] = 'application/json'
-            case _:
-                headers['Content-Type'] = 'application/json'
-
-        return self._authorizer.authorize(
-            requests.Request(
-                method=method,
-                url=target_url,
-                headers=headers,
-                data=content,
-                params=params
-            )
         )
 
     def __send_request[
@@ -304,35 +531,22 @@ class RestClient:
                 (non-2xx status code).
         """
         method_impls: Dict[str, Callable] = {
-            'GET': requests.get,
-            'POST': requests.post,
-            'PUT': requests.put,
-            'DELETE': requests.delete
+            'GET': self._client.get,
+            'POST': self._client.post,
+            'PUT': self._client.put,
+            'DELETE': self._client.delete
         }
-        payload = to_jsonable_python(content) if content else None
-        authorized_request = self.__build_request(
-            method, endpoint, params, extra_headers, payload, service_port
+        authorized_request = super()._build_request(
+            method, endpoint, params, extra_headers, content, service_port
         )
-        response = method_impls[authorized_request.method](
-            authorized_request.url,
-            **dict(
-                headers=dict(authorized_request.headers),
-                params=authorized_request.params,
-                json=authorized_request.data if authorized_request.data else None
-            )
+        response: httpx.Response = method_impls[authorized_request.method](
+            url=authorized_request.url,
+            headers=authorized_request.headers,
+            params=authorized_request.params,
+            json=authorized_request.data if authorized_request.data else None
         )
-        response.raise_for_status()
 
-        if response_type is None:
-            return EmptyContent()
-
-        return (
-            BasicRestResponse(
-                status_code=response.status_code,
-                content=response.content
-            ) if issubclass(response_type, BasicRestResponse)
-            else response_type.model_validate_json(response.content)
-        )
+        return super()._process_response(response, response_type)
 
 
 class BackendRestClient(RestClient):

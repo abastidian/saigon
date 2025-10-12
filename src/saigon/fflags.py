@@ -38,5 +38,9 @@ class FeatureFlags(metaclass=_FeatureFlagsMeta):
             # The actual flag type is the return type of the callable annotation
             flag_type = typing.get_args(value)[1]
             setattr(
-                class_type, key, lambda: FeatureFlags[flag_type, key]
+                class_type,
+                key,
+                lambda attr_type=flag_type, attr_name=key: (
+                    FeatureFlags[attr_type, attr_name]
+                )
             )

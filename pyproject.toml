@@ -17,7 +17,8 @@ requires-python = ">=3.13"
 dependencies = [
     "python_json_logger~=3.2.1",
     "pydantic~=2.11.7",
-    "requests~=2.32.4"
+    "requests~=2.32.5",
+    "httpx~=0.28.1",
 ]
 classifiers = [
     "Programming Language :: Python :: 3"
@@ -32,7 +33,7 @@ aws = [
     "mypy_boto3_secretsmanager~=1.35.93",
     "mypy_boto3_cognito_idp~=1.35.93",
     "mypy_boto3_cognito_identity~=1.35.93",
-    "mypy_boto3_iot~=1.35.93",
+    "mypy-boto3-ssm~=1.35.93",
     "pyjwt~=2.10.1",
 ]
 orm = [
@@ -49,7 +50,7 @@ extras = [
 ]
 dev = [
     "pytest~=8.3.5",
-    "pytest_asyncio~=0.26.0",
+    "pytest_asyncio~=1.2.0",
     "python-dotenv~=1.0.1",
     "flake8~=7.1.1",
     "httpx~=0.28.1",
