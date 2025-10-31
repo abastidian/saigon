@@ -73,7 +73,7 @@ class EnvironmentRepository(KeyValueRepository):
         if value:
             os.environ[key] = str(value)
         else:
-            os.unsetenv(key)
+            os.environ.pop(key, None)
 
 
 class Environment(abc.ABC, BaseModel):

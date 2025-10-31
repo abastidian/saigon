@@ -180,9 +180,9 @@ class BaseDbEnv(Environment):
             # Expected Output:
             # postgresql+psycopg://prod_user:super_secret_password@db.example.com:5432/prod_db?sslmode=prefe
 
-        Scenario 2: Loading from AWS Secrets Manager::
+        Scenario 2: Loading from  SecretVault::
             # Consider the same credentials json from the previous scenario that is now
-            # stored in a AWS SecretsManager, whose secret name is provided through the
+            # stored in a SecretVault, whose secret name is provided through the
             # environment variable MYAPP_DATABASE_CREDENTIALS_SECRET:
 
             class MyAppDbEnv(BaseDbEnv):
@@ -209,6 +209,10 @@ class BaseDbEnv(Environment):
             print(db_env.db_credentials.db_url)
             # Expected Output:
             # postgresql+psycopg://appuser:secure_password@localhost:5432/mydata?sslmode=prefer
+
+            In this scenario, the password can be optionally be supplied as a secret name
+            using the variable MYAPP_DB_PASSWORD_SECRET. In such case, the password value
+            is retrieved via SecretVault
     """
 
     def __init__(
@@ -253,6 +257,15 @@ class BaseDbEnv(Environment):
                 self.__getattr__(credentials_secret_var)
             )
         else:
+            password_secret_var = f"{var_prefix}_DB_PASSWORD_SECRET"
+            if hasattr(self, password_secret_var):
+                db_password = self._secret_vault.get_secret_string(
+                   getattr(self, password_secret_var)
+                )
+                db_password_var = f"{var_prefix}_DB_PASSWORD"
+                kwargs[db_password_var] = kwargs.get(
+                    db_password_var, db_password
+                )
             db_credentials = self._db_credentials_from_vars(kwargs)
 
         # Set the loaded credentials as attributes on self with the correct prefixed names
@@ -287,7 +300,7 @@ class BaseDbEnv(Environment):
         The secret's value is expected to be a JSON string that can be
         parsed into the specified `credentials_type`.
 
-        Requires AWS SDK (boto3) to be configured with appropriate permissions.
+        Requires a SecretVault implementation.
 
         Args:
             secret_key (str): The secret key identifier to fetch the credentials from

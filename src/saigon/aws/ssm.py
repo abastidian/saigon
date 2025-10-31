@@ -1,14 +1,72 @@
-from typing import Type, Optional, Dict
+from typing import Type, Optional, Dict, override
 
 import boto3
 from mypy_boto3_ssm.client import SSMClient
 
 from pydantic import BaseModel
 
+from ..interface import SecretVault
+from ..orm.config import *
+
 __all__ = [
+    'AwsSsmVault',
+    'AwsSsmBaseDbEnv',
     'get_parameter_as_model',
     'get_parameter_mapping_as_model'
 ]
+
+
+class AwsSsmVault(SecretVault):
+    """
+    Concrete implementation of `SecretVault` that uses boto3 SsmClient
+    """
+    def __init__(
+            self, ssm_client: Optional[SSMClient] = None
+    ):
+        self._ssm_client = (
+            ssm_client if ssm_client
+            else boto3.client('ssm')
+        )
+
+    @override
+    def get_secret[SecretModel: BaseModel](
+            self,
+            secret_model: Type[SecretModel],
+            secret_key: str
+    ) -> SecretModel:
+        return get_parameter_as_model(
+            secret_model,
+            secret_key,
+            with_decryption=True,
+            ssm_client=self._ssm_client
+        )
+
+    @override
+    def get_secret_string(self, secret_name) -> str:
+        response = self._ssm_client.get_parameter(
+            Name=secret_name, WithDecryption=True
+        )
+        return response['Parameter']['Value']
+
+
+class AwsSsmBaseDbEnv(BaseDbEnv):
+    """
+    Subclass of `BaseDbEnv` that provides `AwsSsmBaseDbEnv` as provider to access
+    the DB secret.
+    """
+    def __init__(
+            self,
+            var_prefix: str,
+            credentials_type: Type[DbCredentials] = PostgreSQLCredentials,
+            ssm_client: Optional[SSMClient] = None,
+            **kwargs
+    ):
+        super().__init__(
+            var_prefix,
+            credentials_type,
+            AwsSsmVault(ssm_client=ssm_client),
+            **kwargs
+        )
 
 
 def get_parameter_as_model[TargetModel: BaseModel](
