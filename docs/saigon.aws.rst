@@ -26,3 +26,17 @@ secrets
 .. automodule:: saigon.aws.secrets
    :members:
    :show-inheritance:
+
+ssm
+-------
+
+.. automodule:: saigon.aws.ssm
+   :members:
+   :show-inheritance:
+
+rest
+-------
+
+.. automodule:: saigon.aws.rest
+   :members:
+   :show-inheritance:

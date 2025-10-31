@@ -83,8 +83,9 @@ class SecretVault(Protocol):
             secret_key: str
     ) -> SecretModel:
         """
-            Returns the secret specified by its `secret_key` represented as a `SecretModel`
-            object.
+        Returns the secret specified by its `secret_key` represented as a `SecretModel`
+        object.
+
         Args:
             secret_model: Type representation of the secret content
             secret_key: Secret unique identifier
@@ -93,6 +94,9 @@ class SecretVault(Protocol):
             Secret data represented as the specified `SecretModel`
         """
         ...
+
+    def get_secret_string(self, secret_name) -> str:
+        raise NotImplementedError()
 
 
 @runtime_checkable

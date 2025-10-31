@@ -37,3 +37,18 @@ utils
 .. automodule:: saigon.utils
    :members:
    :show-inheritance:
+
+fflags
+------
+
+.. automodule:: saigon.fflags
+   :members:
+   :show-inheritance:
+
+
+iter
+------
+
+.. automodule:: saigon.iter
+   :members:
+   :show-inheritance:

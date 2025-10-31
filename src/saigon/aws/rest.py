@@ -7,7 +7,6 @@ import jwt
 
 from botocore.awsrequest import AWSRequest
 from botocore.auth import SigV4Auth
-from mypy_boto3_cognito_identity.type_defs import CredentialsTypeDef
 
 from pydantic import Field, BaseModel
 
@@ -62,7 +61,7 @@ class SIGv4RequestAuthorizer(RequestAuthorizer):
             password (str): The password for login.
 
         Returns:
-            Tuple[uuid.UUID, CredentialsTypeDef]: A tuple containing the user's UUID
+            Tuple[uuid.UUID, SigV4Credentials]: A tuple containing the user's UUID
                 and the AWS IAM credentials obtained from Cognito.
         """
         login_result = self._client.login_user(

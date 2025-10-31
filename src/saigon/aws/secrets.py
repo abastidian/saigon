@@ -10,7 +10,7 @@ from ..orm.config import *
 
 __all__ = [
     'AwsSecretVault',
-    'AwsBaseDbEnv',
+    'AwsSecretBaseDbEnv',
     'get_secret_as_model'
 ]
 
@@ -37,10 +37,17 @@ class AwsSecretVault(SecretVault):
             secret_model, secret_key, self._secrets_client
         )
 
+    @override
+    def get_secret_string(self, secret_name) -> str:
+        secret_response = self._secrets_client.get_secret_value(
+            SecretId=secret_name
+        )
+        return secret_response['SecretString']
 
-class AwsBaseDbEnv(BaseDbEnv):
+
+class AwsSecretBaseDbEnv(BaseDbEnv):
     """
-    Subclass of `BaseDbEnv` that provides `AwsSecretVault` as provider to access
+    Subclass of `BaseDbEnv` that provides `AwsSecretBaseDbEnv` as provider to access
     the DB secret.
     """
     def __init__(

@@ -1,6 +1,5 @@
 from typing import Type, Mapping, TypeVar, Dict, Set, Any
 
-from pydantic_core import to_jsonable_python
 from pydantic import BaseModel
 
 import sqlalchemy

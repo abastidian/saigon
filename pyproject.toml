@@ -49,14 +49,14 @@ extras = [
     "paramiko~=3.5.1"
 ]
 dev = [
-    "pytest~=8.3.5",
+    "pytest~=8.4.2",
     "pytest_asyncio~=1.2.0",
     "python-dotenv~=1.0.1",
     "flake8~=7.1.1",
     "httpx~=0.28.1",
     "shellody~=0.14",
     "prompt_toolkit~=3.0.51",
-    "hatch==1.14.0",
+    "hatch~=1.15.1",
     "twine==6.1.0"
 ]
 docs = [
