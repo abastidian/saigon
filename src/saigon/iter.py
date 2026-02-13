@@ -3,7 +3,8 @@ from typing import Iterable, Optional, Callable
 __all__ = [
     'is_true_or_valid',
     'first',
-    'contains'
+    'contains',
+    'select'
 ]
 
 
@@ -31,10 +32,11 @@ def first[ItemType](
 ) -> Optional[ItemType]:
     """
     Returns the first item in `item_list` that meets the specified `condition`.
+
     Args:
         item_list: Iterable of items of type `ItemType`
-        condition (Optional): Condition logic to apply to an item.
-            Default is set to `is_true_or_valid`
+        condition (Optional): Condition logic to apply to an item. Default is set
+        to `is_true_or_valid`
 
     Returns:
         First item that meets the condition
@@ -56,10 +58,30 @@ def contains[ItemType](
 
     Args:
         item_list: Iterable of items of type `ItemType`
-        condition (Optional): Condition logic to apply to an item.
-        Default is set to `is_true_or_valid`
+        condition (Optional): Condition logic to apply to an item. Default is set
+        to `is_true_or_valid`
 
     Returns:
         True if at least one item meets the condition
     """
     return first(item_list, condition) is not None
+
+
+def select[ItemType](
+        item_list: Iterable[ItemType],
+        condition: Callable[[ItemType], bool] = is_true_or_valid
+) -> Iterable[ItemType]:
+    """
+    Returns the subset of items that meets the specified `condition`.
+
+    Args:
+        item_list: Iterable of items of type `ItemType`
+        condition (Optional): Condition logic to apply to an item. Default is set
+        to `is_true_or_valid`
+
+    Returns:
+        An iterable with the selected items
+    """
+    return [
+        item for item in item_list if condition(item)
+    ]

@@ -21,34 +21,34 @@ model
 -----
 
 .. automodule:: saigon.model
-   :members:
-   :show-inheritance:
+    :members:
+    :show-inheritance:
 
 sftp
 ----
 
 .. automodule:: saigon.sftp
-   :members:
-   :show-inheritance:
+    :members:
+    :show-inheritance:
 
 utils
 ------
 
 .. automodule:: saigon.utils
-   :members:
-   :show-inheritance:
+    :members:
+    :show-inheritance:
+    :no-index:
 
 fflags
 ------
 
 .. automodule:: saigon.fflags
-   :members:
-   :show-inheritance:
-
+    :members:
+    :show-inheritance:
 
 iter
 ------
 
 .. automodule:: saigon.iter
-   :members:
-   :show-inheritance:
+    :members:
+    :show-inheritance:

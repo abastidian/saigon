@@ -152,6 +152,7 @@ class BaseDbEnv(Environment):
     This class extends the `Environment` class to specifically handle database
     connection details. It can retrieve credentials from the following methods, and
     this order:
+
      - full json object specified in {var_prefix}_DATABASE_CREDENTIALS
      - Secret with key specified in {var_prefix}_DATABASE_CREDENTIALS_SECRET and
        fetch through the specified concrete `SecretVault`
@@ -249,6 +250,7 @@ class BaseDbEnv(Environment):
         # Check if credentials are provided directly through variable
         credentials_var = f"{var_prefix}_DATABASE_CREDENTIALS"
         credentials_secret_var = f"{var_prefix}_DATABASE_CREDENTIALS_SECRET"
+        password_secret_var = f"{var_prefix}_DB_PASSWORD_SECRET"
         if hasattr(self, credentials_var):
             credentials_json = self.__getattr__(credentials_var)
             db_credentials = credentials_type.model_validate_json(credentials_json)
@@ -256,16 +258,17 @@ class BaseDbEnv(Environment):
             db_credentials = self.get_credentials_from_secret(
                 self.__getattr__(credentials_secret_var)
             )
+        elif (
+            hasattr(self, password_secret_var)
+            and (secret_var := getattr(self, password_secret_var))
+        ):
+            db_password = self._secret_vault.get_secret_string(secret_var)
+            db_password_var = f"{var_prefix}_DB_PASSWORD"
+            kwargs[db_password_var] = kwargs.get(
+                db_password_var, db_password
+            )
+            db_credentials = self._db_credentials_from_vars(kwargs)
         else:
-            password_secret_var = f"{var_prefix}_DB_PASSWORD_SECRET"
-            if hasattr(self, password_secret_var):
-                db_password = self._secret_vault.get_secret_string(
-                   getattr(self, password_secret_var)
-                )
-                db_password_var = f"{var_prefix}_DB_PASSWORD"
-                kwargs[db_password_var] = kwargs.get(
-                    db_password_var, db_password
-                )
             db_credentials = self._db_credentials_from_vars(kwargs)
 
         # Set the loaded credentials as attributes on self with the correct prefixed names
@@ -354,7 +357,13 @@ class BaseDbEnv(Environment):
         return self._credentials_type(
             **{
                 self._get_cred_attr(name): value
-                for name, value in db_vars.items() if value is not None
+                for name in self._db_env_vars
+                if (
+                    value := db_vars.get(
+                        name,
+                        getattr(self, name) if hasattr(self, name) else None
+                    )
+                ) is not None
             }
         )
 

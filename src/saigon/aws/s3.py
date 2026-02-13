@@ -65,9 +65,10 @@ def s3_object_to_file(
         os.makedirs(destination_filepath.parent)
     with open(destination_filepath, 'wb') as file_handle:
         logging.info(f"Save S3 object file to={destination_filepath}")
-        file_handle.write(
-            file_object['Body'].read()
-        )
+        for chunk in file_object['Body'].iter_chunks():
+            file_handle.write(
+                chunk
+            )
 
     return destination_filepath
 

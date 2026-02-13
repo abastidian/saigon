@@ -53,7 +53,11 @@ class DbConnector:
     fetching results, and reflecting database metadata. It also integrates
     with a context variable for managing transactional connections.
     """
-    def __init__(self, credentials: DbCredentials):
+    def __init__(
+            self,
+            credentials: DbCredentials,
+            **kwargs,
+    ):
         """Instantiates a SQLAlchemy engine with the given database credentials.
 
         Args:
@@ -61,7 +65,11 @@ class DbConnector:
                 connection details (e.g., `PostgreSQLSecretCredentials`).
         """
         self._engine_config = {
-            'sqlalchemy.url': credentials.db_url
+            'sqlalchemy.url': credentials.db_url,
+            **dict(
+                pool_pre_ping=True, pool_recycle=300,
+                **kwargs,
+            )
         }
 
         # Actually build the engine
