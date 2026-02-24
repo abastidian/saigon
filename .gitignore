@@ -53,3 +53,7 @@ Thumbs.db
 # built docs
 docs/_build
 docs/html
+
+
+.kiro/
+.hypothesis/
