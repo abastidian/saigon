@@ -51,6 +51,7 @@ extras = [
 dev = [
     "pytest~=8.4.2",
     "pytest_asyncio~=1.2.0",
+    "hypothesis~=6.108",
     "python-dotenv~=1.0.1",
     "flake8~=7.1.1",
     "httpx~=0.28.1",
