@@ -12,8 +12,10 @@ from pydantic_core import to_jsonable_python
 from ..model import EmptyContent, BasicRestResponse
 from ..interface import RequestAuthorizer, AsyncRequestAuthorizer
 
+RequestBodyContent = Union[BaseModel, str, bytes]
 
 __all__ = [
+    'RequestBodyContent',
     'RestClient',
     'AsyncRestClient',
     'BackendRestClient',
@@ -90,12 +92,12 @@ class _RestClientBase:
         return 'application/json'
 
     @staticmethod
-    def _serialize_body(content_type: str, content) -> object:
+    def _serialize_body(content_type: str, content: RequestBodyContent) -> object:
         """Serialize request body according to the resolved Content-Type.
 
         Args:
             content_type (str): The resolved Content-Type header value.
-            content: The request body content (BaseModel, str, bytes, or other).
+            content (RequestBodyContent): The request body content.
 
         Returns:
             The serialized body appropriate for the given content type.
@@ -104,7 +106,7 @@ class _RestClientBase:
             ValueError: If content_type is 'application/xml' and content is a BaseModel instance.
         """
         match content_type:
-            case 'application/json':
+            case 'application/json' | 'application/x-www-form-urlencoded':
                 return to_jsonable_python(content)
             case 'application/xml':
                 if isinstance(content, BaseModel):
@@ -113,8 +115,6 @@ class _RestClientBase:
                         "Pass pre-serialized str or bytes."
                     )
                 return content
-            case 'application/x-www-form-urlencoded':
-                return to_jsonable_python(content)
             case 'text/plain':
                 if isinstance(content, BaseModel):
                     return content.model_dump_json()
@@ -122,13 +122,33 @@ class _RestClientBase:
             case _:
                 return content
 
+    @staticmethod
+    def _build_body_kwargs(content_type: str, data: object) -> dict:
+        """Map serialized body data to the appropriate httpx keyword argument.
+
+        Args:
+            content_type (str): The resolved Content-Type header value.
+            data: The serialized request body from ``_serialize_body``.
+
+        Returns:
+            dict: A single-entry dict with the correct httpx kwarg key
+                (``json``, ``data``, or ``content``), or empty if data is None.
+        """
+        if data is None:
+            return {}
+        if content_type == 'application/json':
+            return {'json': data}
+        if content_type == 'application/x-www-form-urlencoded':
+            return {'data': data}
+        return {'content': data}
+
     def _build_request(
             self,
             method: str,
             endpoint: str,
             params: Optional[dict] = None,
             extra_headers: Optional[dict] = None,
-            content: Optional[Union[BaseModel, str, bytes]] = None,
+            content: Optional[RequestBodyContent] = None,
             service_port: Optional[int] = None
     ) -> requests.Request:
         """Builds an `Request` object for a given HTTP request.
@@ -150,7 +170,7 @@ class _RestClientBase:
             extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
                 Can override default 'Accept' (GET) and 'Content-Type' (non-GET) headers.
                 Defaults to None.
-            content (Optional[Union[BaseModel, str, bytes]]): The request body content.
+            content (Optional[RequestBodyContent]): The request body content.
                 Can be a Pydantic BaseModel, a raw str, or raw bytes. The serialization
                 strategy is determined by the resolved Content-Type header. Defaults to None.
             service_port (Optional[int]): A specific port to use for this request.
@@ -181,8 +201,10 @@ class _RestClientBase:
 
         serialized_body = None
         if content is not None:
-            content_type = self._resolve_content_type(headers)
-            serialized_body = self._serialize_body(content_type, content)
+            serialized_body = self._serialize_body(
+                self._resolve_content_type(headers),
+                content
+            )
 
         return requests.Request(
             method=method,
@@ -314,14 +336,13 @@ class AsyncRestClient(_RestClientBase):
         )
 
     async def create_resource[
-        RequestContentTypeDef: BaseModel,
         ResponseContentTypeDef: BaseModel
     ](
         self,
         response_type: Type[ResponseContentTypeDef],
         endpoint: str,
         query_params: Optional[dict] = None,
-        content: Optional[RequestContentTypeDef | str | bytes] = None,
+        content: Optional[RequestBodyContent] = None,
         headers: Optional[dict] = None,
         service_port: Optional[int] = None
     ) -> ResponseContentTypeDef:
@@ -332,7 +353,7 @@ class AsyncRestClient(_RestClientBase):
                 to which the JSON response content should be deserialized.
             endpoint (str): The API endpoint path (e.g., "/items").
             query_params (Optional[Dict]): Mapping of URL query parameters
-            content (Optional[RequestContentTypeDef | str | bytes]): The request body.
+            content (Optional[RequestBodyContent]): The request body.
                 Accepts a Pydantic BaseModel instance (serialized according to Content-Type),
                 a raw ``str``, or raw ``bytes``. Defaults to None.
                 When ``headers`` includes a ``Content-Type`` override, the body is serialized
@@ -380,7 +401,6 @@ class AsyncRestClient(_RestClientBase):
         )
 
     async def __send_request[
-        RequestContentTypeDef: BaseModel,
         ResponseContentTypeDef: BaseModel
     ](
             self,
@@ -388,7 +408,7 @@ class AsyncRestClient(_RestClientBase):
             endpoint: str,
             params: Optional[dict] = None,
             extra_headers: Optional[dict] = None,
-            content: Optional[RequestContentTypeDef] = None,
+            content: Optional[RequestBodyContent] = None,
             response_type: Optional[Type[ResponseContentTypeDef]] = None,
             service_port: Optional[int] = None
     ) -> Union[ResponseContentTypeDef, EmptyContent]:
@@ -410,7 +430,7 @@ class AsyncRestClient(_RestClientBase):
             params (Optional[dict]): A dictionary of URL query parameters. Defaults to None.
             extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
                 Defaults to None.
-            content (Optional[RequestContentTypeDef]): The request body content.
+            content (Optional[RequestBodyContent]): The request body content.
                 Defaults to None.
             response_type (Optional[Type[ResponseContentTypeDef]]): The Pydantic model type
                 for the response. If None, `EmptyContent` is returned.
@@ -440,14 +460,7 @@ class AsyncRestClient(_RestClientBase):
             )
         )
         content_type = super()._resolve_content_type(authorized_request.headers)
-        body_kwargs: dict = {}
-        if authorized_request.data is not None:
-            if content_type == 'application/json':
-                body_kwargs['json'] = authorized_request.data
-            elif content_type == 'application/x-www-form-urlencoded':
-                body_kwargs['data'] = authorized_request.data
-            else:
-                body_kwargs['content'] = authorized_request.data
+        body_kwargs = super()._build_body_kwargs(content_type, authorized_request.data)
         response: httpx.Response = await method_impls[authorized_request.method](
             url=authorized_request.url,
             headers=authorized_request.headers,
@@ -524,14 +537,13 @@ class RestClient(_RestClientBase):
         )
 
     def create_resource[
-        RequestContentTypeDef: BaseModel,
         ResponseContentTypeDef: BaseModel
     ](
         self,
         response_type: Type[ResponseContentTypeDef],
         endpoint: str,
         query_params: Optional[dict] = None,
-        content: Optional[RequestContentTypeDef | str | bytes] = None,
+        content: Optional[RequestBodyContent] = None,
         headers: Optional[dict] = None,
         service_port: Optional[int] = None
     ) -> ResponseContentTypeDef:
@@ -542,7 +554,7 @@ class RestClient(_RestClientBase):
                 to which the JSON response content should be deserialized.
             endpoint (str): The API endpoint path (e.g., "/items").
             query_params (Optional[Dict]): Mapping of URL query parameters
-            content (Optional[RequestContentTypeDef | str | bytes]): The request body.
+            content (Optional[RequestBodyContent]): The request body.
                 Accepts a Pydantic BaseModel instance (serialized according to Content-Type),
                 a raw ``str``, or raw ``bytes``. Defaults to None.
                 When ``headers`` includes a ``Content-Type`` override, the body is serialized
@@ -590,7 +602,6 @@ class RestClient(_RestClientBase):
         )
 
     def __send_request[
-        RequestContentTypeDef: BaseModel,
         ResponseContentTypeDef: BaseModel
     ](
             self,
@@ -598,7 +609,7 @@ class RestClient(_RestClientBase):
             endpoint: str,
             params: Optional[dict] = None,
             extra_headers: Optional[dict] = None,
-            content: Optional[RequestContentTypeDef] = None,
+            content: Optional[RequestBodyContent] = None,
             response_type: Optional[Type[ResponseContentTypeDef]] = None,
             service_port: Optional[int] = None
     ) -> Union[ResponseContentTypeDef, EmptyContent]:
@@ -620,7 +631,7 @@ class RestClient(_RestClientBase):
             params (Optional[dict]): A dictionary of URL query parameters. Defaults to None.
             extra_headers (Optional[dict]): A dictionary of additional HTTP headers.
                 Defaults to None.
-            content (Optional[RequestContentTypeDef]): The request body content.
+            content (Optional[RequestBodyContent]): The request body content.
                 Defaults to None.
             response_type (Optional[Type[ResponseContentTypeDef]]): The Pydantic model type
                 for the response. If None, `EmptyContent` is returned.
@@ -649,14 +660,7 @@ class RestClient(_RestClientBase):
             )
         )
         content_type = super()._resolve_content_type(authorized_request.headers)
-        body_kwargs: dict = {}
-        if authorized_request.data is not None:
-            if content_type == 'application/json':
-                body_kwargs['json'] = authorized_request.data
-            elif content_type == 'application/x-www-form-urlencoded':
-                body_kwargs['data'] = authorized_request.data
-            else:
-                body_kwargs['content'] = authorized_request.data
+        body_kwargs = super()._build_body_kwargs(content_type, authorized_request.data)
         response: httpx.Response = method_impls[authorized_request.method](
             url=authorized_request.url,
             headers=authorized_request.headers,
