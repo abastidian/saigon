@@ -8,6 +8,18 @@ from pydantic_core import to_jsonable_python
 from saigon.model import BasicRestResponse, EmptyContent
 from saigon.rest.client import RestClient, _RestClientBase
 
+_DUMMY_REQUEST = httpx.Request('GET', 'http://example.com/')
+NON_GET_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE']
+JSON_FAMILY_CONTENT_TYPES = ['application/json', 'application/x-www-form-urlencoded']
+JSON_COMPATIBLE_TYPES = ['application/json', 'application/x-www-form-urlencoded']
+RAW_CONTENT_TYPES = ['application/xml', 'text/plain', 'application/octet-stream']
+NON_JSON_CONTENT_TYPES = [
+    'text/plain',
+    'text/html',
+    'application/xml',
+    'application/octet-stream',
+    'text/csv',
+]
 
 class SamplePayload(BaseModel):
     name: str
@@ -52,19 +64,6 @@ def content_type_key_variants():
     return st.sampled_from(['content-type', 'Content-Type', 'CONTENT-TYPE', 'Content-type'])
 
 
-NON_GET_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE']
-JSON_FAMILY_CONTENT_TYPES = ['application/json', 'application/x-www-form-urlencoded']
-JSON_COMPATIBLE_TYPES = ['application/json', 'application/x-www-form-urlencoded']
-RAW_CONTENT_TYPES = ['application/xml', 'text/plain', 'application/octet-stream']
-NON_JSON_CONTENT_TYPES = [
-    'text/plain',
-    'text/html',
-    'application/xml',
-    'application/octet-stream',
-    'text/csv',
-]
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -87,9 +86,6 @@ def _make_client_with_capture():
     client = RestClient(service_url='http://example.com')
     client._client = httpx.Client(transport=transport)
     return client, captured
-
-
-_DUMMY_REQUEST = httpx.Request('GET', 'http://example.com/')
 
 
 def _make_response(status_code: int, body: str, content_type: str) -> httpx.Response:
