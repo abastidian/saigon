@@ -21,6 +21,7 @@ NON_JSON_CONTENT_TYPES = [
     'text/csv',
 ]
 
+
 class SamplePayload(BaseModel):
     name: str
     value: int
