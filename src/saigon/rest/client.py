@@ -459,8 +459,12 @@ class AsyncRestClient(_RestClientBase):
                 method, endpoint, params, extra_headers, content, service_port
             )
         )
-        content_type = _RestClientBase._resolve_content_type(authorized_request.headers)
-        body_kwargs = _RestClientBase._build_body_kwargs(content_type, authorized_request.data)
+        body_kwargs = {}
+        if method_impls[method] != self._client.get:
+            body_kwargs = _RestClientBase._build_body_kwargs(
+                _RestClientBase._resolve_content_type(authorized_request.headers),
+                authorized_request.data
+            )
         response: httpx.Response = await method_impls[authorized_request.method](
             url=authorized_request.url,
             headers=authorized_request.headers,
@@ -659,8 +663,12 @@ class RestClient(_RestClientBase):
                 method, endpoint, params, extra_headers, content, service_port
             )
         )
-        content_type = _RestClientBase._resolve_content_type(authorized_request.headers)
-        body_kwargs = _RestClientBase._build_body_kwargs(content_type, authorized_request.data)
+        body_kwargs = {}
+        if method_impls[method] != self._client.get:
+            body_kwargs = _RestClientBase._build_body_kwargs(
+                _RestClientBase._resolve_content_type(authorized_request.headers),
+                authorized_request.data
+            )
         response: httpx.Response = method_impls[authorized_request.method](
             url=authorized_request.url,
             headers=authorized_request.headers,
