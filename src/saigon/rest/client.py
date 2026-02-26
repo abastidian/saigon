@@ -201,8 +201,8 @@ class _RestClientBase:
 
         serialized_body = None
         if content is not None:
-            serialized_body = self._serialize_body(
-                self._resolve_content_type(headers),
+            serialized_body = _RestClientBase._serialize_body(
+                _RestClientBase._resolve_content_type(headers),
                 content
             )
 
@@ -233,7 +233,7 @@ class _RestClientBase:
                 content=response.text
             )
 
-        response_content_type = cls._resolve_content_type(dict(response.headers))
+        response_content_type = _RestClientBase._resolve_content_type(dict(response.headers))
         if response_content_type.startswith('application/json'):
             return response_type.model_validate_json(response.content)
 
@@ -459,8 +459,8 @@ class AsyncRestClient(_RestClientBase):
                 method, endpoint, params, extra_headers, content, service_port
             )
         )
-        content_type = super()._resolve_content_type(authorized_request.headers)
-        body_kwargs = super()._build_body_kwargs(content_type, authorized_request.data)
+        content_type = _RestClientBase._resolve_content_type(authorized_request.headers)
+        body_kwargs = _RestClientBase._build_body_kwargs(content_type, authorized_request.data)
         response: httpx.Response = await method_impls[authorized_request.method](
             url=authorized_request.url,
             headers=authorized_request.headers,
@@ -659,8 +659,8 @@ class RestClient(_RestClientBase):
                 method, endpoint, params, extra_headers, content, service_port
             )
         )
-        content_type = super()._resolve_content_type(authorized_request.headers)
-        body_kwargs = super()._build_body_kwargs(content_type, authorized_request.data)
+        content_type = _RestClientBase._resolve_content_type(authorized_request.headers)
+        body_kwargs = _RestClientBase._build_body_kwargs(content_type, authorized_request.data)
         response: httpx.Response = method_impls[authorized_request.method](
             url=authorized_request.url,
             headers=authorized_request.headers,
