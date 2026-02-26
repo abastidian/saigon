@@ -144,7 +144,7 @@ class MySQLCredentials(DbCredentials):
         )
 
 
-class BaseDbEnv(Environment):
+class BaseDbEnv[CredentialsType: DbCredentials](Environment):
     """
     Manages database environment variables, optionally loading credentials
     from a concrete `SecretVault`.
@@ -219,7 +219,7 @@ class BaseDbEnv(Environment):
     def __init__(
             self,
             var_prefix: str,
-            credentials_type: Type[DbCredentials] = PostgreSQLCredentials,
+            credentials_type: Type[CredentialsType] = PostgreSQLCredentials,
             secret_vault: Optional[SecretVault] = None,
             **kwargs
     ):
@@ -252,11 +252,11 @@ class BaseDbEnv(Environment):
         credentials_secret_var = f"{var_prefix}_DATABASE_CREDENTIALS_SECRET"
         password_secret_var = f"{var_prefix}_DB_PASSWORD_SECRET"
         if hasattr(self, credentials_var):
-            credentials_json = self.__getattr__(credentials_var)
+            credentials_json = getattr(self, credentials_var)
             db_credentials = credentials_type.model_validate_json(credentials_json)
         elif hasattr(self, credentials_secret_var):
             db_credentials = self.get_credentials_from_secret(
-                self.__getattr__(credentials_secret_var)
+                getattr(self, credentials_secret_var)
             )
         elif (
             hasattr(self, password_secret_var)
@@ -276,10 +276,10 @@ class BaseDbEnv(Environment):
 
     @property
     def db_schema(self) -> Optional[str]:
-        return self.__getattr__(self._get_db_var('schema'))
+        return getattr(self, self._get_db_var('schema'))
 
     @property
-    def db_credentials(self) -> DbCredentials:
+    def db_credentials(self) -> CredentialsType:
         """Provides the database credentials as an object of `credentials_type`.
 
         This property dynamically constructs the `DbCredentials` object
@@ -292,7 +292,7 @@ class BaseDbEnv(Environment):
         """
         return self._db_credentials_from_vars(
             {
-                name: self.__getattr__(name)
+                name: getattr(self, name)
                 for name in self._db_env_vars
             }
         )

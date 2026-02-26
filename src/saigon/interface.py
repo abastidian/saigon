@@ -10,6 +10,7 @@ __all__ = [
     'EventHandler',
     'SecretVault',
     'RequestAuthorizer',
+    'AsyncRequestAuthorizer',
     'KeyValueRepository'
 ]
 
@@ -103,6 +104,13 @@ class SecretVault(Protocol):
 class RequestAuthorizer(Protocol):
     @abstractmethod
     def authorize(self, request: Request) -> Request:
+        ...
+
+
+@runtime_checkable
+class AsyncRequestAuthorizer(Protocol):
+    @abstractmethod
+    async def authorize(self, request: Request) -> Request:
         ...
 
 

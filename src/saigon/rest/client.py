@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
 from ..model import EmptyContent, BasicRestResponse
-from ..interface import RequestAuthorizer
+from ..interface import RequestAuthorizer, AsyncRequestAuthorizer
 
 
 __all__ = [
@@ -27,6 +27,12 @@ class NoAuthRequestAuthorizer(RequestAuthorizer):
         return request
 
 
+class AsyncNoAuthRequestAuthorizer(AsyncRequestAuthorizer):
+    @override
+    async def authorize(self, request: requests.Request) -> requests.Request:
+        return request
+
+
 class _RestClientBase:
     """Base class for REST API clients implementations."""
 
@@ -34,13 +40,11 @@ class _RestClientBase:
             self,
             service_url: str,
             service_port: int | None = None,
-            api_prefix: Optional[str] = '',
-            authorizer=NoAuthRequestAuthorizer()
+            api_prefix: Optional[str] = ''
     ):
         self._service_url = service_url
         self._service_port = service_port
         self._api_prefix = api_prefix
-        self._authorizer = authorizer
 
     def _build_service_url(self, service_port: Optional[int] = None):
         """Constructs the full service URL based on base URL, optional port, and API prefix.
@@ -116,14 +120,12 @@ class _RestClientBase:
             case _:
                 headers['Content-Type'] = 'application/json'
 
-        return self._authorizer.authorize(
-            requests.Request(
-                method=method,
-                url=target_url,
-                headers=headers,
-                data=to_jsonable_python(content) if content else None,
-                params=params
-            )
+        return requests.Request(
+            method=method,
+            url=target_url,
+            headers=headers,
+            data=to_jsonable_python(content) if content else None,
+            params=params
         )
 
     @classmethod
@@ -188,7 +190,7 @@ class AsyncRestClient(_RestClientBase):
             service_url: str,
             service_port: int | None = None,
             api_prefix: Optional[str] = '',
-            authorizer=NoAuthRequestAuthorizer()
+            authorizer=AsyncNoAuthRequestAuthorizer()
     ):
         """Initializes the RestClientBase.
 
@@ -198,7 +200,8 @@ class AsyncRestClient(_RestClientBase):
             api_prefix (Optional[str]): A prefix to add to all API endpoints (e.g., "/v1").
                 Defaults to an empty string.
         """
-        super().__init__(service_url, service_port, api_prefix, authorizer)
+        super().__init__(service_url, service_port, api_prefix)
+        self._authorizer = authorizer
         self._client = httpx.AsyncClient()
 
     async def close(self):
@@ -349,8 +352,11 @@ class AsyncRestClient(_RestClientBase):
             'PUT': self._client.put,
             'DELETE': self._client.delete
         }
-        authorized_request = super()._build_request(
-            method, endpoint, params, extra_headers, content, service_port
+
+        authorized_request = await self._authorizer.authorize(
+            super()._build_request(
+                method, endpoint, params, extra_headers, content, service_port
+            )
         )
         response: httpx.Response = await method_impls[authorized_request.method](
             url=authorized_request.url,
@@ -385,7 +391,8 @@ class RestClient(_RestClientBase):
             api_prefix (Optional[str]): A prefix to add to all API endpoints (e.g., "/v1").
                 Defaults to an empty string.
         """
-        super().__init__(service_url, service_port, api_prefix, authorizer)
+        super().__init__(service_url, service_port, api_prefix)
+        self._authorizer = authorizer
         self._client = httpx.Client()
 
     def close(self):
@@ -536,8 +543,10 @@ class RestClient(_RestClientBase):
             'PUT': self._client.put,
             'DELETE': self._client.delete
         }
-        authorized_request = super()._build_request(
-            method, endpoint, params, extra_headers, content, service_port
+        authorized_request = self._authorizer.authorize(
+            super()._build_request(
+                method, endpoint, params, extra_headers, content, service_port
+            )
         )
         response: httpx.Response = method_impls[authorized_request.method](
             url=authorized_request.url,
