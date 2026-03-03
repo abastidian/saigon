@@ -64,19 +64,24 @@ class DbConnector:
             credentials (DbCredentials): An object containing the database
                 connection details (e.g., `PostgreSQLSecretCredentials`).
         """
-        self._engine_config = {
-            'sqlalchemy.url': credentials.db_url,
-            **dict(
-                pool_pre_ping=True, pool_recycle=300,
-                **kwargs,
-            )
-        }
+        sa_config = {}
+        engine_config = {}
+        for k, v in kwargs.items():
+            target_config = sa_config if k.startswith("sqlalchemy.") else engine_config
+            target_config[k] = v
+
+        self._engine_config = dict(
+            {
+                'sqlalchemy.url': credentials.db_url
+            },
+            **sa_config
+        )
 
         # Actually build the engine
         self._engine = None
-        self.refresh_engine()
+        self.refresh_engine(**engine_config)
 
-    def refresh_engine(self) -> None:
+    def refresh_engine(self, **kwargs) -> None:
         """
         Refreshes the database connection by re-creating the SQLAlchemy engine.
 
@@ -89,7 +94,8 @@ class DbConnector:
         """
         try:
             self._engine: sqlalchemy.engine.Engine = engine_from_config(
-                configuration=self._engine_config
+                configuration=self._engine_config,
+                **kwargs
             )
 
             # Relying on garbage collection to close out the previous engine's connections and

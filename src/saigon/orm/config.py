@@ -36,6 +36,7 @@ class DbCredentials(abc.ABC, BaseModel):
     database: str = 'test-db'
     username: str = 'test-user'
     password: str = 'test-pass'
+    connect_timeout: Optional[int] = None
 
     @property
     def host_url(self) -> str:
@@ -100,11 +101,15 @@ class PostgreSQLCredentials(DbCredentials):
         Returns:
             str: The full PostgreSQL connection URL, including SSL mode.
         """
-        return (
+        url = (
             f"postgresql+psycopg://"
             f"{self.username}:{self.password}@{self.host_url}/{self.database}"
             f"?sslmode={self.ssl_mode}"
         )
+        if self.connect_timeout:
+            url += f"&connect_timeout={self.connect_timeout}"
+
+        return url
 
 
 class MySQLCredentials(DbCredentials):
