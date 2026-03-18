@@ -21,8 +21,9 @@ def is_true_or_valid[ItemType](item: ItemType) -> bool:
     """
     return (
         item is not None
-        and item is True if isinstance(item, bool)
-        else True
+        and (
+            item is True if isinstance(item, bool) else True
+        )
     )
 
 

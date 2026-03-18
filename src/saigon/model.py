@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import TypeVar, List, Optional, Self, Dict, Any, Annotated, Type, override
 
 from pydantic import (
-    BaseModel, model_validator, Field, BeforeValidator, ConfigDict
+    BaseModel, model_validator, Field, ConfigDict
 )
 from pydantic_core import to_jsonable_python
 
@@ -201,7 +201,6 @@ class QueryDataParams[QuerySelection: BaseModel](BaseModelNoExtra):
         )
         return selection_type(**query_selection_dict)
 
-    @property
     def url_params_dict(self, camel_case=True) -> Dict[str, Any]:
         """
         Generates a dictionary of URL parameters from the query data parameters.
@@ -216,11 +215,7 @@ class QueryDataParams[QuerySelection: BaseModel](BaseModelNoExtra):
 
         params_dict = {}
         if self.has_max_count():
-            max_count_key = 'max_count'
-            params_dict[
-                self.to_camelcase(max_count_key)
-                if camel_case else max_count_key
-            ] = self.max_count
+            params_dict['max_count'] = self.max_count
 
         if self.query:
             params_dict.update(
@@ -230,8 +225,9 @@ class QueryDataParams[QuerySelection: BaseModel](BaseModelNoExtra):
                     by_alias=True
                 )
             )
-            if camel_case:
-                params_dict = self.camelcase_keys(params_dict)
+
+        if camel_case:
+            params_dict = self.camelcase_keys(params_dict)
 
         return params_dict
 
@@ -350,8 +346,10 @@ class TimeRange(Range[datetime]):
     ]
     end: Annotated[
         datetime,
-        Field(None, serialization_alias='end_time'),
-        BeforeValidator(lambda x: x if x else datetime.now())
+        Field(
+            default_factory=datetime.now,
+            serialization_alias='end_time'
+        )
     ]
 
     @override
@@ -374,11 +372,11 @@ class IntRange(Range[int]):
     representing the full range of a 64-bit signed integer.
 
     Attributes:
-        start (int): The start integer of the range. Defaults to 2^63 - 1.
-        end (int): The end integer of the range. Defaults to -(2^63).
+        start (int): The start integer of the range. Defaults to -(2^63).
+        end (int): The end integer of the range. Defaults to 2^63 - 1.
     """
-    start: Annotated[int, 2 ** 63 - 1]
-    end: Annotated[int, -(2 ** 63)]
+    start: int = Field(-(2 ** 63))
+    end: int = Field(2 ** 63 - 1)
 
 
 class UIntRange(Range[int]):
@@ -387,11 +385,11 @@ class UIntRange(Range[int]):
     representing the full range of a 64-bit unsigned integer.
 
     Attributes:
-        start (int): The start integer of the range. Defaults to 2^64 - 1.
-        end (int): The end integer of the range. Defaults to 0.
+        start (int): The start integer of the range. Defaults to 0.
+        end (int): The end integer of the range. Defaults to 2^64 - 1.
     """
-    start: Annotated[int, 2 ** 64 - 1]
-    end: Annotated[int, 0]
+    start: int = Field(0)
+    end: int = Field(2 ** 64 - 1)
 
 
 class FloatRange(Range[float]):
@@ -403,8 +401,8 @@ class FloatRange(Range[float]):
         start (float): The start float of the range. Defaults to negative infinity.
         end (float): The end float of the range. Defaults to positive infinity.
     """
-    start: Annotated[float, float('-inf')]
-    end: Annotated[float, float('inf')]
+    start: float = Field(float('-inf'))
+    end: float = Field(float('inf'))
 
 
 class BasicRestResponse(BaseModel):

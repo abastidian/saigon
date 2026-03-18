@@ -95,14 +95,22 @@ class RequestHandler[
                   (raises `HTTP_500_INTERNAL_SERVER_ERROR`).
                 - If `_handle` itself raises an `HTTPException`.
         """
-        handler_class = next(filter(
-            lambda cls: cls.__name__ == RequestHandler.__name__,
-            getattr(self.__class__, '__orig_bases__')
-        ))
-        response_type = get_args(handler_class)[1]
+        response_type = EmptyResponseBody
+        for base in self.__class__.__mro__:
+            orig_bases = getattr(base, '__orig_bases__', [])
+            for orig_base in orig_bases:
+                if getattr(orig_base, '__origin__', None) is RequestHandler:
+                    args_ = get_args(orig_base)
+                    if len(args_) > 1:
+                        response_type = args_[1]
+                    break
+            else:
+                continue
+            break
+
         try:
             result = self._handle(
-                request_body if request_body else EmptyRequestBody(),
+                request_body if request_body is not None else EmptyRequestBody(),
                 *args,
                 **kwargs
             )
@@ -118,4 +126,7 @@ class RequestHandler[
             raise
         except Exception:
             logger.exception('Generic exception')
-            raise HTTPException(status_code=500, detail='error processing the request')
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='error processing the request'
+            )

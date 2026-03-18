@@ -262,7 +262,8 @@ class AbstractDbManager(abc.ABC):
             self,
             db_connector: DbConnector,
             retries: Optional[int] = CONNECTION_MAX_RETRIES_DEFAULT,
-            schema: Optional[str | None] = None
+            schema: Optional[str | None] = None,
+            reflect: bool = True,
     ) -> None:
         """Initializes the AbstractDbManager.
 
@@ -276,7 +277,8 @@ class AbstractDbManager(abc.ABC):
             schema (Optional[str]): Optional target schema. Defaults to `None`.
         """
         self.db_connector = db_connector
-        self.__reflect(retries, schema)
+        if reflect:
+            self.__reflect(retries, schema)
 
     @classmethod
     def meta(cls) -> sqlalchemy.MetaData:

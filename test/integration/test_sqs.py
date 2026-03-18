@@ -7,6 +7,9 @@ import sqlalchemy
 
 from saigon.aws.flow.sqs import SqsToRdsForwarder, SqlStatementBuilder
 
+from saigon_test.fixtures import *
+from saigon_test.infra import mark_only_envs, ExecutionEnvironment
+
 
 class TestMessage(BaseModel):
     id: int
@@ -25,7 +28,8 @@ class TestInsertStatementBuilder(SqlStatementBuilder[TestMessage]):
         return to_jsonable_python(message, exclude_none=True),
 
 
-class TestSqsToRdsForwarder:
+@mark_only_envs(ExecutionEnvironment.SBX)
+class TestSqsToRdsForwarder():
 
     @pytest.fixture()
     def sqs_forwarder(self, db_manager, test_sqs_queue_url) -> SqsToRdsForwarder:
@@ -40,9 +44,3 @@ class TestSqsToRdsForwarder:
 
     def test_forward(self, sqs_forwarder):
         sqs_forwarder.forward()
-
-
-
-
-
-

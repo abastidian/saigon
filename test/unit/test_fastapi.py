@@ -5,8 +5,18 @@ from base64 import urlsafe_b64decode
 
 from fastapi import background, status
 
-from saigon.fastapi.headers import *
-from saigon.fastapi.utils import *
+from saigon.fastapi.headers import (
+    HeaderContext,
+    DEFAULT_API_REQUEST_ID_HEADER_NAME,
+    DEFAULT_IDENTITY_ID_HEADER_NAME,
+    custom_request_context
+)
+from saigon.fastapi.utils import (
+    LogMiddleware,
+    RouteContext,
+    DefaultRouteContextDependency,
+    route_context
+)
 
 CustomRequestContextTest = custom_request_context(
     'CustomRequestContext',
@@ -51,7 +61,8 @@ class TestRequestContext:
         if request_id:
             assert context.request_id == request_id
         else:
-            assert uuid.UUID(bytes=urlsafe_b64decode(context.request_id.encode()))
+            decoded_id = urlsafe_b64decode(context.request_id.encode())
+            assert uuid.UUID(bytes=decoded_id)
 
         assert context.headers == {
             DEFAULT_IDENTITY_ID_HEADER_NAME: str(context.identity_id),
@@ -165,7 +176,9 @@ class TestLogMiddleware:
             headers=header_context.headers
         )
         assert response.status_code == status.HTTP_200_OK, response.content
-        assert test_api_route_handler.lc_items == header_context.model_dump(by_alias=False)
+        assert test_api_route_handler.lc_items == header_context.model_dump(
+            by_alias=False
+        )
 
     def test_empty_header_contenxt(
             self,

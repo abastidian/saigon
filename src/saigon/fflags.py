@@ -16,7 +16,10 @@ class _FeatureFlagsMeta(type):
     def __call__(cls, *args, **kwargs):
         if _FeatureFlagsMeta._repository is None:
             _FeatureFlagsMeta._repository = args[0]
-            super().__call__(*args, **kwargs)
+            if cls is FeatureFlags:
+                return None
+
+        return super().__call__(*args, **kwargs)
 
     def __getitem__(
             cls, flag_spec: Tuple[KeyValueRepository.ValueType, str]
@@ -33,7 +36,7 @@ class _FeatureFlagsMeta(type):
 class FeatureFlags(metaclass=_FeatureFlagsMeta):
     def __init__(self, class_type: Type, *args, **kwargs):
         for key, value in self.__class__.__annotations__.items():
-            if not isinstance(value, Callable):
+            if not isinstance(value, Callable) or len(typing.get_args(value)) < 2:
                 raise ValueError('invalid annotation for flag definition')
             # The actual flag type is the return type of the callable annotation
             flag_type = typing.get_args(value)[1]

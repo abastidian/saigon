@@ -94,3 +94,4 @@ package = [
 publish = [
     "twine upload --repository pypi dist/saigon_py-`hatch version`*"
 ]
+test = "cd test && PYTHONPATH=../src pytest --log-cli-level=INFO"

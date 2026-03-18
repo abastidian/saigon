@@ -5,7 +5,11 @@ from io import StringIO
 import pytest
 
 from saigon.logutils import (
-    enable_log_context, logcontext, set_log_context, asynclogcontext
+    enable_log_context,
+    logcontext,
+    set_log_context,
+    asynclogcontext,
+    unset_log_context
 )
 
 test_logger = logging.getLogger(__name__)
@@ -15,9 +19,16 @@ class LogMessageReader:
     def __init__(self, buffer: StringIO):
         self._buffer = buffer
 
-    def read_log(self) -> dict:
+    def read_raw(self) -> str:
         self._buffer.seek(0)
-        return json.loads(self._buffer.readline())
+        return self._buffer.readline()
+
+    def read_log(self) -> dict:
+        line = self.read_raw()
+        # If there's a prefix, we need to strip it
+        if ': {' in line:
+            line = '{' + line.split(': {', 1)[1]
+        return json.loads(line)
 
     def clear(self):
         self._buffer.seek(0)
@@ -71,6 +82,30 @@ class TestLoggingContext:
             parent_key1=None,
             parent_key2=None
         )
+
+    def test_unset_log_context_global(self, log_reader):
+        with logcontext():
+            set_log_context(key1='val1', key2='val2')
+            test_logger.info('msg1')
+            assert_log_keys(log_reader, key1='val1', key2='val2')
+
+            unset_log_context('key1')
+            test_logger.info('msg2')
+            assert_log_keys(log_reader, key1=None, key2='val2')
+
+    def test_log_prefix(self):
+        log_capture_string = StringIO()
+        handler = logging.StreamHandler(log_capture_string)
+        logging.getLogger().addHandler(handler)
+
+        try:
+            enable_log_context(log_prefix='MYPREFIX')
+
+            test_logger.info('prefixed message')
+            output = log_capture_string.getvalue()
+            assert 'MYPREFIX: {' in output
+        finally:
+            logging.getLogger().removeHandler(handler)
 
     @classmethod
     def child_function(
@@ -146,11 +181,16 @@ class TestLoggingContext:
                 parent_key1='override'
             )
             test_logger.info('after override')
-            assert_log_keys(log_reader, **dict(parent_keys, parent_key1='value1'))
+            assert_log_keys(
+                log_reader, **dict(parent_keys, parent_key1='value1')
+            )
 
         test_logger.info('after exit')
         assert_log_keys(
-            log_reader, message='after exit', parent_key1=None, parent_key2=None
+            log_reader,
+            message='after exit',
+            parent_key1=None,
+            parent_key2=None
         )
 
     @pytest.mark.parametrize(

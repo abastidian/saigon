@@ -226,7 +226,7 @@ class NodeEntity(BaseModel, Generic[NodeEntityType]):
             child.traverse(visitor)
 
     @field_serializer('parent')
-    def serialize_parent(self, parent: NodeEntityType, _info) -> Optional[str]:
+    def serialize_parent(self, parent: Self, _info) -> Optional[str]:
         """Serializes the 'parent' field to its 'name' attribute if it exists.
 
         This custom serializer is used by Pydantic when serializing a NodeEntity
@@ -234,11 +234,14 @@ class NodeEntity(BaseModel, Generic[NodeEntityType]):
         instead just includes its name.
 
         Args:
-            parent (NodeEntityType): The parent entity being serialized.
+            parent (Self): The parent entity being serialized.
             _info: Pydantic's SerializationInfo object (unused here but required).
 
         Returns:
             Optional[str]: The name of the parent entity if it has a 'name' attribute,
                 otherwise None.
         """
-        return getattr(parent, 'name') if hasattr(parent, 'name') else None
+        return (
+            getattr(parent.entity, 'name')
+            if hasattr(parent.entity, 'name') else None
+        )
