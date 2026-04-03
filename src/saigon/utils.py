@@ -11,7 +11,8 @@ from typing import (
     Callable,
     Any,
     ClassVar,
-    override
+    override,
+    Type
 )
 
 from pydantic import BaseModel, field_serializer, ConfigDict
@@ -60,14 +61,14 @@ class EnvironmentRepository(KeyValueRepository):
 
     @override
     def get_by_name(
-            self, key_type: KeyValueRepository.ValueType, key: str
+            self, key_type: Type[KeyValueRepository.ValueType], key: str
     ) -> Optional[KeyValueRepository.ValueType]:
         value_parser = self._VALUE_PARSERS.get(key_type, key_type)
         formatted_value = os.getenv(key)
         return value_parser(formatted_value) if formatted_value else None
 
     @override
-    def set_by_name[V: KeyValueRepository](
+    def set_by_name[V: KeyValueRepository.ValueType](
             self, key: str, value: V
     ) -> Optional[V]:
         if value:

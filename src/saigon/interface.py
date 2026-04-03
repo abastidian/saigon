@@ -119,7 +119,7 @@ class KeyValueRepository(Protocol):
 
     @abstractmethod
     def get_by_name[V: KeyValueRepository.ValueType](
-            self, key_type: V, key: str
+            self, key_type: Type[V], key: str
     ) -> Optional[V]:
         ...
 
