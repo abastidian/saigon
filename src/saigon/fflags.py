@@ -14,7 +14,7 @@ class _FeatureFlagsMeta(type):
     _repository: KeyValueRepository = None
 
     def __call__(cls, *args, **kwargs):
-        if _FeatureFlagsMeta._repository is None:
+        if args and args[0]:
             _FeatureFlagsMeta._repository = args[0]
             if cls is FeatureFlags:
                 return None
@@ -22,12 +22,14 @@ class _FeatureFlagsMeta(type):
         return super().__call__(*args, **kwargs)
 
     def __getitem__(
-            cls, flag_spec: Tuple[KeyValueRepository.ValueType, str]
+            cls, flag_spec: Tuple[Type[KeyValueRepository.ValueType], str]
     ) -> Optional[KeyValueRepository.ValueType]:
         if not isinstance(flag_spec[0], type):
             raise ValueError('flag type not provided')
 
-        return _FeatureFlagsMeta._repository.get_by_name(flag_spec[0], flag_spec[1])
+        return _FeatureFlagsMeta._repository.get_by_name(
+            flag_spec[0], flag_spec[1]
+        )
 
     def __setitem__(cls, flag_name, flag_value):
         _FeatureFlagsMeta._repository.set_by_name(flag_name, flag_value)
