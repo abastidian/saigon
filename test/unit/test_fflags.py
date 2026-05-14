@@ -19,36 +19,33 @@ class MockRepo(KeyValueRepository):
 
 class TestFeatureFlags:
     def test_fflags_initialization(self):
-        # Reset metaclass state
-        from saigon.fflags import _FeatureFlagsMeta
-        _FeatureFlagsMeta._repository = None
 
         repo = MockRepo()
         # Initialize the global repository on FeatureFlags
         FeatureFlags(repo)
 
-        class MyClass:
-            pass
-
         class MyFlags(FeatureFlags):
             FLAG1: typing.Callable[[], bool]
 
+            def __init__(self, *args):
+                super().__init__(MyFlags, *args)
+
         # We need to pass MyClass to MyFlags to get attributes on MyClass
-        MyFlags(MyClass)
+        MyFlags()
 
         # Let's verify if FLAG1 is on MyClass
-        assert hasattr(MyClass, 'FLAG1')
+        assert hasattr(MyFlags, 'FLAG1')
 
         # Initially not set
-        assert MyClass.FLAG1() is None
+        assert MyFlags.FLAG1() is None
 
         # Set it
         repo.set_by_name('FLAG1', True)
-        assert MyClass.FLAG1() is True
+        assert MyFlags.FLAG1() is True
 
         # Change it
         repo.set_by_name('FLAG1', False)
-        assert MyClass.FLAG1() is False
+        assert MyFlags.FLAG1() is False
 
     def test_fflags_setitem(self):
         from saigon.fflags import _FeatureFlagsMeta

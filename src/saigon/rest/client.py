@@ -42,7 +42,7 @@ class _RestClientBase:
             self,
             service_url: str,
             service_port: int | None = None,
-            api_prefix: Optional[str] = ''
+            api_prefix=''
     ):
         self._service_url = service_url
         self._service_port = service_port
@@ -282,8 +282,9 @@ class AsyncRestClient(_RestClientBase):
             self,
             service_url: str,
             service_port: int | None = None,
-            api_prefix: Optional[str] = '',
-            authorizer=AsyncNoAuthRequestAuthorizer()
+            api_prefix='',
+            authorizer=AsyncNoAuthRequestAuthorizer(),
+            http_client: httpx.AsyncClient | None = None
     ):
         """Initializes the RestClientBase.
 
@@ -293,9 +294,9 @@ class AsyncRestClient(_RestClientBase):
             api_prefix (Optional[str]): A prefix to add to all API endpoints (e.g., "/v1").
                 Defaults to an empty string.
         """
-        super().__init__(service_url, service_port, api_prefix)
+        super().__init__(service_url, service_port, api_prefix=api_prefix)
         self._authorizer = authorizer
-        self._client = httpx.AsyncClient()
+        self._client = http_client or httpx.AsyncClient()
 
     async def close(self):
         if self._client is not None:
@@ -488,7 +489,8 @@ class RestClient(_RestClientBase):
             service_url: str,
             service_port: int | None = None,
             api_prefix: Optional[str] = '',
-            authorizer=NoAuthRequestAuthorizer()
+            authorizer=NoAuthRequestAuthorizer(),
+            http_client: httpx.Client | None = None
     ):
         """Initializes the RestClientBase.
 
@@ -500,7 +502,7 @@ class RestClient(_RestClientBase):
         """
         super().__init__(service_url, service_port, api_prefix)
         self._authorizer = authorizer
-        self._client = httpx.Client()
+        self._client = http_client or httpx.Client()
 
     def close(self):
         if self._client is not None:
@@ -687,7 +689,11 @@ class BackendRestClient(RestClient):
     """
 
     def __init__(
-            self, alb_dns: str, service_port: int, api_version: str
+            self,
+            alb_dns: str,
+            service_port: int,
+            api_version: str,
+            http_client: httpx.Client | None = None
     ):
         """Initializes the BackendRestClient.
 
@@ -698,7 +704,10 @@ class BackendRestClient(RestClient):
             api_version (str): The API version prefix for the endpoints (e.g., "v1").
         """
         super().__init__(
-            f"http://{alb_dns}", service_port, f"/{api_version}"
+            f"http://{alb_dns}",
+            service_port,
+            f"/{api_version}",
+            http_client=http_client
         )
 
 
