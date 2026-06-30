@@ -4,7 +4,8 @@ __all__ = [
     'is_true_or_valid',
     'first',
     'contains',
-    'select'
+    'select',
+    'reduce'
 ]
 
 
@@ -86,3 +87,14 @@ def select[ItemType](
     return [
         item for item in item_list if condition(item)
     ]
+
+
+def reduce[ItemType, ReduceType](
+        item_list: Iterable[ItemType],
+        reduce_function: Callable[[ItemType, Optional[ReduceType]], ReduceType]
+) -> ReduceType:
+    result = None
+    for item in item_list:
+        result = reduce_function(item, result)
+
+    return result
